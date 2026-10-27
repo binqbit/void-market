@@ -19,6 +19,10 @@ name = "native"
 path = "tests/native.rs"
 required-features = ["tfhe-backend"]
 
+[[example]]
+name = "encrypted_arithmetic"
+required-features = ["tfhe-backend"]
+
 [features]
 default = ["tfhe-backend"]
 tfhe-backend = ["dep:tfhe", "dep:serde", "dep:bincode"]
