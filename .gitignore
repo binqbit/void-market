@@ -1,0 +1,13 @@
+# Owner-private finalized specifications and agent material are not public Git content.
+/private-docs/
+/.agent-workspace/
+# Ignore rules do not encrypt archives or remove already tracked content.
+.env
+.env.*
+*.key
+*.pem
+*.sqlite
+*.sqlite3
+*.db
+/target/
+/node_modules/
