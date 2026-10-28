@@ -84,6 +84,12 @@ impl EncodedObject {
     pub fn digest(&self) -> [u8; 32] {
         self.digest
     }
+
+    /// Exact safe-versioned native bytes, excluding this SDK's outer frame.
+    /// Their identity differs from the digest of the complete encoded object.
+    pub fn native_payload(&self) -> &[u8] {
+        &self.bytes[HEADER..]
+    }
 }
 
 impl std::fmt::Debug for EncodedObject {
@@ -240,6 +246,23 @@ pub fn import_ciphertext(
     Ok(TfheValue::from_encrypted(value, context.binding()))
 }
 
+/// Import while retaining the authenticated original bytes for later binding.
+pub fn import_ciphertext_artifact(
+    bytes: &[u8],
+    expected_digest: [u8; 32],
+    expected_type: DataType,
+    context: &EvaluationContext,
+    limits: EncodingLimits,
+) -> Result<(TfheValue, EncodedObject)> {
+    let value = import_ciphertext(bytes, expected_digest, expected_type, context, limits)?;
+    let original = EncodedObject {
+        bytes: bytes.to_vec(),
+        digest: expected_digest,
+    };
+
+    Ok((value, original))
+}
+
 pub fn export_public_key(key: &PublicKey, limits: EncodingLimits) -> Result<EncodedObject> {
     let body = native::serialization::serialize(&*key.native, limits.public_key - HEADER as u64)?;
     encode_frame(PUBLIC_KEY, 0, key.binding, body, limits)
@@ -352,4 +375,21 @@ pub fn import_compact(
     })?;
 
     Ok(TfheValue::from_encrypted(value, context.binding()))
+}
+
+/// Import one compact input while preserving its original frame and native bytes.
+pub fn import_compact_artifact(
+    bytes: &[u8],
+    expected_digest: [u8; 32],
+    expected_type: DataType,
+    context: &EncryptionContext,
+    limits: EncodingLimits,
+) -> Result<(TfheValue, EncodedObject)> {
+    let value = import_compact(bytes, expected_digest, expected_type, context, limits)?;
+    let original = EncodedObject {
+        bytes: bytes.to_vec(),
+        digest: expected_digest,
+    };
+
+    Ok((value, original))
 }
