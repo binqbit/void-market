@@ -1,5 +1,5 @@
 use super::{
-    drafts,
+    activity, drafts,
     model::{CompleteSale, CreateAuction, EditAuction, PlaceBid, PublishAuction},
     repository, service,
 };
@@ -19,6 +19,7 @@ pub fn configure(config: &mut web::ServiceConfig) {
         .route("/v1/auctions", web::get().to(list))
         .route("/v1/auctions", web::post().to(create))
         .route("/v1/me/auctions", web::get().to(mine))
+        .route("/v1/me/bids", web::get().to(bids))
         .route("/v1/auctions/{id}", web::get().to(get))
         .route("/v1/auctions/{id}/draft", web::post().to(edit))
         .route("/v1/auctions/{id}/publish", web::post().to(publish))
@@ -56,6 +57,15 @@ async fn mine(
         HttpResponse::Ok()
             .json(repository::list(&state, Some(owner.0), true, limit, offset).await?),
     )
+}
+
+async fn bids(
+    state: web::Data<AppState>,
+    owner: Principal,
+    page: web::Query<Page>,
+) -> Result<HttpResponse> {
+    let (limit, offset) = page.bounds()?;
+    Ok(HttpResponse::Ok().json(activity::list(&state, owner.0, limit, offset).await?))
 }
 
 async fn get(

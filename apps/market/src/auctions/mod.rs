@@ -1,3 +1,4 @@
+mod activity;
 pub mod amount;
 mod clock;
 #[cfg(feature = "demo-mode")]
