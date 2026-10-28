@@ -147,6 +147,36 @@ test("an expired session returns the portfolio to sign-in", async ({
   ).toBeVisible();
 });
 
+test("a late profile response cannot restore an expired session", async ({
+  page,
+}) => {
+  let releaseProfile: () => void = () => {};
+  const delayedProfile = new Promise<void>((resolve) => {
+    releaseProfile = resolve;
+  });
+  let requests = 0;
+  await page.route("**/api/v1/me", async (route) => {
+    requests += 1;
+    if (requests === 1) await delayedProfile;
+    await route.fulfill({ json: profile });
+  });
+  await page.route("**/api/v1/me/assets?*", (route) =>
+    route.fulfill({ status: 401, json: { message: "Sign in first" } }),
+  );
+
+  await page.goto("/portfolio");
+  const signedOut = page.getByRole("heading", {
+    name: "Your portfolio starts here.",
+  });
+  await expect(signedOut).toBeVisible();
+
+  const lateResponse = page.waitForResponse("**/api/v1/me");
+  releaseProfile();
+  await lateResponse;
+  await page.waitForLoadState("networkidle");
+  await expect(signedOut).toBeVisible();
+});
+
 test("transfer confirmation and recovery reuse the same request after a lost response", async ({
   page,
 }) => {

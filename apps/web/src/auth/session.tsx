@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ApiError, message, post, request } from "../api/client";
 import type { Profile } from "../api/types";
@@ -17,32 +17,46 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const revision = useRef(0);
 
   async function refresh() {
+    const current = ++revision.current;
     setLoading(true);
     setError(null);
     try {
-      setProfile(await request<Profile>("/v1/me"));
+      const next = await request<Profile>("/v1/me");
+      if (revision.current === current) setProfile(next);
     } catch (failure) {
+      if (revision.current !== current) return;
       setProfile(null);
       if (!(failure instanceof ApiError && failure.status === 401)) {
         setError(message(failure));
       }
     } finally {
-      setLoading(false);
+      if (revision.current === current) setLoading(false);
     }
   }
 
   async function signOut() {
     await post("/v1/auth/logout", {});
+    revision.current += 1;
     setProfile(null);
+    setLoading(false);
   }
 
   useEffect(() => {
-    void refresh();
-    const expired = () => setProfile(null);
+    const expired = () => {
+      revision.current += 1;
+      setProfile(null);
+      setError(null);
+      setLoading(false);
+    };
     window.addEventListener("void:session-expired", expired);
-    return () => window.removeEventListener("void:session-expired", expired);
+    void refresh();
+    return () => {
+      revision.current += 1;
+      window.removeEventListener("void:session-expired", expired);
+    };
   }, []);
 
   return (
