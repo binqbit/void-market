@@ -29,7 +29,27 @@ export function inboxEntries(snapshot: MessageSnapshot | null): InboxEntry[] {
   }
 
   for (const item of snapshot.transactions ?? []) {
-    if (!["confirmed", "cancelled"].includes(item.status)) {
+    const superseded =
+      item.status === "failed" &&
+      snapshot.transactions?.some(
+        (next) =>
+          next.id !== item.id &&
+          next.kind === item.kind &&
+          next.auction_id === item.auction_id &&
+          next.asset_id === item.asset_id &&
+          next.account_id === item.account_id &&
+          next.created_at_ms > item.created_at_ms &&
+          next.status !== "cancelled",
+      );
+    if (
+      !["confirmed", "cancelled"].includes(item.status) &&
+      !superseded &&
+      !(
+        item.status === "failed" &&
+        !item.can_retry &&
+        !(item.kind === "transfer" && item.direction === "outgoing")
+      )
+    ) {
       entries.push({
         kind: "transaction",
         key: `transaction:${item.id}`,
@@ -38,10 +58,10 @@ export function inboxEntries(snapshot: MessageSnapshot | null): InboxEntry[] {
     }
   }
 
-  // All request types share the server's monotonic activity revision.
+  // Updates to an existing request must not move it ahead of newer requests.
   return entries.sort(
     (left, right) =>
-      right.item.revision - left.item.revision ||
+      right.item.created_at_ms - left.item.created_at_ms ||
       left.key.localeCompare(right.key),
   );
 }

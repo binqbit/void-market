@@ -178,3 +178,9 @@ dialog > p {
     transform: rotate(360deg);
   }
 }
+
+.field-error {
+  color: var(--danger, #d47777);
+  font-size: 0.85rem;
+  margin: 6px 0;
+}

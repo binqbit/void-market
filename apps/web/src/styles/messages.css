@@ -281,3 +281,38 @@
     font-size: 14px;
   }
 }
+
+.message-archive {
+  border-bottom: 1px solid var(--line);
+  padding-block: 14px;
+}
+.message-archive > summary {
+  cursor: pointer;
+  color: var(--text);
+}
+.message-archive > summary span {
+  margin-left: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.message-archive .message-list {
+  margin-top: 16px;
+}
+.message-group {
+  display: grid;
+  gap: 12px;
+}
+.message-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.message-group-heading h2 {
+  margin: 10px 0 0;
+  font-size: 1rem;
+}
+.message-group-heading span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}

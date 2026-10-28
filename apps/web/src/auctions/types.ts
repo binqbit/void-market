@@ -65,6 +65,7 @@ export interface Auction {
 
 export interface SaleRequest {
   revision: number;
+  created_at_ms: number;
   payment_status?: string;
   auction_id: string;
   request_id: string;

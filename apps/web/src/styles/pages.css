@@ -448,3 +448,54 @@ summary {
 .account-access > .button {
   margin-top: 16px;
 }
+
+.transaction-history-item {
+  padding: 18px 20px;
+  margin: 0;
+  color: var(--text);
+  border-bottom: 1px solid var(--line);
+}
+.transaction-history-item:last-child {
+  border-bottom: 0;
+}
+.transaction-history-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+}
+.transaction-history-description {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.transaction-history-description > span,
+.transaction-history-value time,
+.transaction-history-value > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.transaction-history-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.transaction-history-item[open] > summary {
+  margin-bottom: 18px;
+}
+.transaction-history-item > .native-transaction {
+  margin-top: 12px;
+}
+@media (max-width: 600px) {
+  .transaction-history-item > summary {
+    flex-wrap: wrap;
+  }
+  .transaction-history-value {
+    padding-left: 50px;
+    align-items: flex-start;
+    width: 100%;
+  }
+}

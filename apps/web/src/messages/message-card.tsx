@@ -48,7 +48,7 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
   }, [anchor, item.timer_running, connectionError]);
 
   async function approve() {
-    if (busy) return;
+    if (busy || connectionError) return;
     setBusy(true);
     setFailure(null);
     try {
@@ -148,7 +148,7 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
             </span>
             <button
               className="button primary"
-              disabled={busy || deadlineReached}
+              disabled={busy || deadlineReached || Boolean(connectionError)}
               onClick={() => void approve()}
             >
               {busy ? (

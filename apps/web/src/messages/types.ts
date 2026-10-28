@@ -11,6 +11,8 @@ export interface ApprovalMessage {
   id: string;
   session_id: string;
   session_title: string;
+  auction_title?: string | null;
+  created_at_ms: number;
   auction_id?: string | null;
   can_withdraw?: boolean;
   request_id: string;
@@ -38,6 +40,7 @@ export interface MessageSnapshot {
   sessions: {
     id: string;
     title: string;
+    auction_title?: string | null;
     auction_id?: string | null;
     can_withdraw?: boolean;
     status: string;

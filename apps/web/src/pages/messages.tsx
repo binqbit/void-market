@@ -9,22 +9,40 @@ import { SaleCard } from "../messages/sale-card";
 import { TransactionCard } from "../demo/transaction-card";
 import { inboxEntries, needsApproval } from "../messages/inbox";
 import type { InboxEntry } from "../messages/inbox";
+import { loginHref } from "../auth/return-to";
+import type { ApprovalMessage } from "../messages/types";
 
 export function MessagesPage() {
   const session = useSession();
   const { snapshot, loading, error, refresh } = useMessages();
   if (session.loading) return <Loading>Loading your account…</Loading>;
-  if (!session.profile) return <Navigate to="/login" replace />;
+  if (!session.profile) return <Navigate to={loginHref("/messages")} replace />;
   const pending = snapshot?.messages.filter(needsApproval) ?? [];
   const history =
     snapshot?.messages
       .filter((item) => !pending.some((active) => active.id === item.id))
-      .sort((left, right) => right.revision - left.revision) ?? [];
+      .sort((left, right) => right.created_at_ms - left.created_at_ms) ?? [];
   const sessions =
     snapshot?.sessions.filter(
-      (item) => !pending.some((message) => message.session_id === item.id),
+      (item) =>
+        ["initializing", "active"].includes(item.status) &&
+        !pending.some((message) => message.session_id === item.id),
     ) ?? [];
   const entries = inboxEntries(snapshot);
+  const requestGroups = new Map<string, InboxEntry[]>();
+  for (const entry of entries) {
+    const key = entry.item.auction_id ?? entry.key;
+    const group = requestGroups.get(key) ?? [];
+    group.push(entry);
+    requestGroups.set(key, group);
+  }
+  const historyGroups = new Map<string, ApprovalMessage[]>();
+  for (const item of history) {
+    const key = item.auction_id ?? item.session_id;
+    const group = historyGroups.get(key) ?? [];
+    group.push(item);
+    historyGroups.set(key, group);
+  }
 
   return (
     <div className="page-width page-content messages-page">
@@ -38,7 +56,11 @@ export function MessagesPage() {
           </p>
         </div>
         <span className="message-count">
-          {snapshot?.pending ?? 0} awaiting approval
+          {error
+            ? "Requests unavailable"
+            : snapshot
+              ? `${snapshot.pending} awaiting approval`
+              : "Checking requests…"}
         </span>
       </div>
       {snapshot?.custody_mode === "development" && (
@@ -53,19 +75,35 @@ export function MessagesPage() {
       {error && <ErrorNotice retry={() => void refresh()}>{error}</ErrorNotice>}
       {loading && !snapshot ? (
         <Loading>Loading messages…</Loading>
-      ) : entries.length ? (
+      ) : !snapshot ? null : entries.length ? (
         <section className="message-list" aria-label="Awaiting your approval">
-          {entries.map((entry) => (
-            <InboxCard key={entry.key} entry={entry} />
-          ))}
+          {[...requestGroups].map(([key, group]) =>
+            group.length === 1 ? (
+              <InboxCard key={group[0].key} entry={group[0]} />
+            ) : (
+              <div className="message-group" key={key}>
+                <div className="message-group-heading">
+                  <h2>
+                    {group[0].kind === "sale"
+                      ? group[0].item.title
+                      : (group[0].item.auction_title ?? "Auction requests")}
+                  </h2>
+                  <span>{group.length} requests</span>
+                </div>
+                {group.map((entry) => (
+                  <InboxCard key={entry.key} entry={entry} />
+                ))}
+              </div>
+            ),
+          )}
         </section>
-      ) : (
+      ) : !error ? (
         <section className="empty-state messages-empty">
           <Inbox size={36} strokeWidth={1.3} aria-hidden="true" />
           <h2>You are all caught up</h2>
           <p>New approval requests will appear here automatically.</p>
         </section>
-      )}
+      ) : null}
       {sessions.length > 0 && (
         <section className="message-sessions" aria-label="Your sessions">
           <h2>Your sessions</h2>
@@ -77,11 +115,21 @@ export function MessagesPage() {
       {history.length > 0 && (
         <section className="message-history">
           <h2>Recent activity</h2>
-          <div className="message-list">
-            {history.map((item) => (
-              <MessageCard key={item.id} item={item} />
-            ))}
-          </div>
+          {[...historyGroups].map(([key, items]) => (
+            <details className="message-archive" key={key}>
+              <summary>
+                <strong>
+                  {items[0].auction_title ?? items[0].session_title}
+                </strong>
+                <span>{items.length} earlier approvals</span>
+              </summary>
+              <div className="message-list">
+                {items.map((item) => (
+                  <MessageCard key={item.id} item={item} />
+                ))}
+              </div>
+            </details>
+          ))}
         </section>
       )}
     </div>

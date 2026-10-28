@@ -1,3 +1,4 @@
+import { formatZec, normalizeZecInput, zecInputError } from "../amounts";
 import { ArrowUpRight, CheckCircle2, Clock3, LockKeyhole } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,6 +32,8 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [partial, setPartial] = useState("");
+  const retryClaim =
+    item.status === "failed" && item.kind === "airdrop" && item.can_retry;
   useEffect(() => {
     setElapsed(0);
     if (!item.timer_running || messagesError) return;
@@ -116,12 +119,20 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
           )}
         </div>
         <h3>{item.title}</h3>
+        {item.counterparty && (
+          <p className="field-help">
+            {item.direction === "incoming" ? "From" : "To"}{" "}
+            {item.counterparty.username
+              ? `@${item.counterparty.username}`
+              : item.counterparty.name}
+          </p>
+        )}
         <p className="message-description">
           {progress[item.status] ?? "Checking transaction status…"}
         </p>
         {item.amount && (
           <p className="native-amount">
-            {item.amount} <span>ZEC</span>
+            {formatZec(item.amount)} <span>ZEC</span>
           </p>
         )}
         <div className="native-links">
@@ -170,16 +181,30 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
             <LockKeyhole size={16} /> Review & approve
           </button>
         )}
-        {item.status === "failed" && item.kind === "payment" && (
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => void preparePayment()}
-          >
-            Prepare payment again
-          </button>
+        {retryClaim && (
+          <Link className="button" to="/demo">
+            Request local ZEC again
+          </Link>
         )}
+        {item.can_retry && item.kind === "mint" && (
+          <Link className="button" to="/demo">
+            Get another local NFT
+          </Link>
+        )}
+        {item.can_retry &&
+          item.status === "failed" &&
+          item.kind === "payment" &&
+          item.direction !== "incoming" && (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => void preparePayment()}
+            >
+              Prepare payment again
+            </button>
+          )}
         {item.kind === "transfer" &&
+          item.direction === "outgoing" &&
           ["preparing", "ready", "failed"].includes(item.status) && (
             <button
               className="quiet-button"
@@ -190,7 +215,15 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
             </button>
           )}
       </div>
-      {item.error && <ErrorNotice>{item.error}</ErrorNotice>}
+      {item.error && (
+        <ErrorNotice>
+          {item.kind === "airdrop" &&
+          item.error ===
+            "The signed payment expired without confirmation. Prepare and review a fresh payment."
+            ? "This ZEC claim expired without confirmation. Open Demo to request local ZEC again."
+            : item.error}
+        </ErrorNotice>
+      )}
       {error && <ErrorNotice>{error}</ErrorNotice>}
       {item.kind === "payment" && item.can_approve && (
         <details className="partial-payment">
@@ -205,10 +238,17 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
               inputMode="decimal"
               value={partial}
               maxLength={32}
-              onChange={(event) => setPartial(event.target.value)}
+              onChange={(event) =>
+                setPartial(normalizeZecInput(event.target.value))
+              }
               placeholder="0.50000000"
             />
           </label>
+          {zecInputError(partial) && (
+            <p className="field-error" role="alert">
+              {zecInputError(partial)}
+            </p>
+          )}
           <button
             className="button"
             disabled={busy || !validAmount(partial)}
@@ -253,11 +293,16 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
               <>
                 <div>
                   <dt>Payment</dt>
-                  <dd>{review.amount} ZEC</dd>
+                  <dd>{formatZec(review.amount)} ZEC</dd>
                 </div>
                 <div>
                   <dt>Network fee</dt>
-                  <dd>{review.fee ?? "Unavailable"} ZEC</dd>
+                  <dd>
+                    {review.fee === null
+                      ? "Unavailable"
+                      : formatZec(review.fee)}{" "}
+                    ZEC
+                  </dd>
                 </div>
               </>
             )}

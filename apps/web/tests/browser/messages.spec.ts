@@ -28,6 +28,7 @@ async function fixture(page: Page) {
         id: messageId,
         session_id: sessionId,
         session_title: "Private approval session",
+        created_at_ms: 30,
         request_id: requestId,
         revision: 1,
         stage: "mask_contribution",
@@ -109,6 +110,7 @@ test("messages show one clear approval and preserve the layout", async ({
     fullPage: true,
   });
   await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.locator(".message-archive > summary").click();
   await expect(page.getByText("Approved — processing")).toBeVisible();
   expect(requests).toEqual([{ request_id: requestId, revision: 1 }]);
   await expect(
@@ -146,6 +148,7 @@ test("an update arriving during snapshot loading is not lost", async ({
   );
   release();
 
+  await page.locator(".message-archive > summary").click();
   await expect(page.getByText("Approved — processing")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),
@@ -182,6 +185,7 @@ test("withdrawal needs explicit confirmation and closes the session", async ({
     .getByRole("button", { name: "Withdraw bid", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
+  await page.locator(".message-archive > summary").click();
   await expect(
     page.getByText("Bid withdrawn", { exact: true }).first(),
   ).toBeVisible();
@@ -199,6 +203,7 @@ test("server-confirmed expiry removes approval", async ({ page }) => {
   snapshot.sessions[0].status = "interrupted";
   snapshot.pending = 0;
   await page.goto("/messages");
+  await page.locator(".message-archive > summary").click();
   await expect(
     page.getByText("Disqualified — time budget expired"),
   ).toBeVisible();
@@ -229,7 +234,7 @@ test("a failed refresh marks the timer as unconfirmed", async ({ page }) => {
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),
-  ).toBeEnabled();
+  ).toBeDisabled();
 });
 
 test("early approvals keep the timer paused until bidding closes", async ({
@@ -276,6 +281,7 @@ test("new activity appears first across request types in compact cards", async (
   snapshot.sales = [
     {
       revision: 10,
+      created_at_ms: 10,
       auction_id: "sale-auction",
       request_id: "sale-request",
       generation: 1,
@@ -297,6 +303,11 @@ test("new activity appears first across request types in compact cards", async (
       status: "ready",
       network: "zcash",
       title: "Pay the auction invoice",
+      direction: "outgoing",
+      counterparty: null,
+      auction_title: null,
+      created_at_ms: 20,
+      updated_at_ms: 20,
       transaction_id: null,
       ethereum_transaction: null,
       nft: null,
@@ -306,6 +317,7 @@ test("new activity appears first across request types in compact cards", async (
       error: null,
       revision: 20,
       can_approve: true,
+      can_retry: false,
       remaining_ms: 600000,
       timer_running: false,
       confirmation: null,
@@ -338,13 +350,13 @@ test("new activity appears first across request types in compact cards", async (
     fullPage: true,
   });
 
-  snapshot.transactions[0].revision = 40;
+  snapshot.transactions![0].revision = 40;
   await page.evaluate(() =>
     window.dispatchEvent(new Event("test-messages-hint")),
   );
   await expect(titles).toHaveText([
-    "Pay the auction invoice",
     "Contribute your privacy mask",
+    "Pay the auction invoice",
     "Approve the sale transfer",
   ]);
   await expect(
@@ -353,7 +365,7 @@ test("new activity appears first across request types in compact cards", async (
 
   await page.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(titles.first()).toHaveText("Pay the auction invoice");
+  await expect(titles.first()).toHaveText("Contribute your privacy mask");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

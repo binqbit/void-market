@@ -1,3 +1,4 @@
+import { formatZec } from "../amounts";
 import { Clock3, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -33,7 +34,7 @@ export function SaleCard({ item }: { item: SaleRequest }) {
         </div>
         <p className="message-description">
           Buyer <strong>{accountName(item.buyer)}</strong> ·{" "}
-          <strong>{item.price} ZEC</strong>
+          <strong>{formatZec(item.price)} ZEC</strong>
         </p>
         <div className="message-links">
           <Link className="text-link" to={`/market/${item.auction_id}`}>

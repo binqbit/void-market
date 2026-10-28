@@ -1,3 +1,5 @@
+import type { Account } from "../api/types";
+
 export interface NativeTransaction {
   id: string;
   account_id: string;
@@ -14,6 +16,11 @@ export interface NativeTransaction {
   status: string;
   network: "ethereum" | "zcash";
   title: string;
+  direction: "incoming" | "outgoing";
+  counterparty: Account | null;
+  auction_title: string | null;
+  created_at_ms: number;
+  updated_at_ms: number;
   transaction_id: string | null;
   ethereum_transaction: {
     from: string;
@@ -37,6 +44,7 @@ export interface NativeTransaction {
   error: string | null;
   revision: number;
   can_approve: boolean;
+  can_retry: boolean;
   remaining_ms: number | null;
   timer_running: boolean;
   confirmation: {

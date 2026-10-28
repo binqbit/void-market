@@ -17,7 +17,7 @@ import { CreateAuctionDialog } from "../auctions/create-dialog";
 import { MyAuctions } from "../auctions/my-auctions";
 import { useMessages } from "../messages/provider";
 import { useDemoMode } from "../demo/config";
-import { TransactionCard } from "../demo/transaction-card";
+import { TransactionHistory } from "../portfolio/transaction-history";
 import { NativeTransferDialog } from "../portfolio/native-transfer-dialog";
 import { loginHref } from "../auth/return-to";
 
@@ -79,7 +79,9 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
     revision,
   );
   const history = useRemote<Transfer[]>(
-    tab === "history" ? `/v1/me/transfers?limit=20&offset=${page * 20}` : null,
+    tab === "history" && !demo
+      ? `/v1/me/transfers?limit=20&offset=${page * 20}`
+      : null,
     revision,
   );
   const active = tab === "assets" ? assets : history;
@@ -220,7 +222,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           {tab === "assets"
             ? "Current ownership"
             : demo
-              ? "Confirmed local transactions"
+              ? "Local transaction history"
               : "Internal ownership transfers"}
         </span>
       </div>
@@ -230,14 +232,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
         aria-labelledby={`${tab}-tab`}
       >
         {tab === "history" && demo ? (
-          <div className="demo-transactions">
-            {(snapshot?.transactions ?? []).map((item) => (
-              <TransactionCard key={item.id} item={item} />
-            ))}
-            {!snapshot?.transactions?.length && (
-              <p>No local transactions yet.</p>
-            )}
-          </div>
+          <TransactionHistory />
         ) : tab === "auctions" ? (
           <MyAuctions />
         ) : active.loading ? (
@@ -291,6 +286,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           />
         )}
         {tab !== "auctions" &&
+          !(tab === "history" && demo) &&
           !active.loading &&
           !active.error &&
           (page > 0 || active.data?.length === 20) && (
