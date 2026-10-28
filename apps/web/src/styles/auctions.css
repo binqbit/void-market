@@ -149,15 +149,22 @@
   flex-wrap: wrap;
   gap: 12px;
 }
+.auction-consent,
 .auction-action-panel .auction-consent {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 12px;
+  margin: 0;
+}
+.auction-action-panel .auction-consent {
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.65;
-  margin: 0;
+}
+dialog .auction-consent {
+  align-items: center;
+  margin-bottom: 16px;
 }
 .auction-consent input {
   width: 18px;
@@ -166,6 +173,9 @@
   padding: 0;
   margin-top: 4px;
   accent-color: var(--accent);
+}
+dialog .auction-consent input {
+  margin: 0;
 }
 .auction-review {
   display: grid;
