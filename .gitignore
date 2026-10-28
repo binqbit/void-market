@@ -21,3 +21,9 @@ node_modules/
 /apps/web/playwright-report/
 /apps/web/test-results/
 *.tsbuildinfo
+
+# Local NFT contract build artifacts.
+/contracts/demo-nft/out/
+/contracts/demo-nft/cache/
+/.localnet/
+**/__pycache__/

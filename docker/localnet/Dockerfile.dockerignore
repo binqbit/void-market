@@ -1,0 +1,9 @@
+**
+!scripts/
+!scripts/localnet/
+!scripts/localnet/*.py
+!docker/
+!docker/localnet/
+!docker/localnet/Dockerfile
+!docker/localnet/Dockerfile.dockerignore
+**/__pycache__/
