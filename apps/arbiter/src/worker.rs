@@ -6,7 +6,7 @@ use crate::{
     error::{Error, Result},
     repository::Repository,
 };
-use arbiter_protocol::{ArtifactRef, Completion, Job, JobStatus};
+use arbiter_protocol::{ArtifactRef, Completion, DemoRelease, Job, JobStatus};
 use std::{
     sync::{
         Arc,
@@ -14,7 +14,10 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::{Semaphore, watch};
+use tokio::{
+    sync::{OwnedSemaphorePermit, Semaphore, watch},
+    task::JoinHandle,
+};
 use uuid::Uuid;
 
 pub(crate) struct Worker {
@@ -53,30 +56,17 @@ async fn run_check(
 ) -> Result<()> {
     let repository = &worker.repository;
     let gateway = &worker.gateway;
-    let artifacts = worker.artifacts.clone();
-    let allow_unverified_mechanics = worker.allow_unverified_mechanics;
     if *stop.borrow() || !alive.load(Ordering::Relaxed) {
         return interrupt(repository, gateway, job).await;
     }
+
     let permit = tokio::select! {
         permit = worker.semaphore.clone().acquire_owned() => permit.map_err(|_| Error::Ownership)?,
         _ = stop.changed() => return interrupt(repository, gateway, job).await,
     };
-    let input = job.input.clone();
-    let store = artifacts.clone();
-    let start = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let manifest: CheckManifest = store.record(&input)?;
-        if matches!(manifest.assurance, Assurance::HonestRoleMechanics)
-            && !allow_unverified_mechanics
-        {
-            return Err(Error::ProofUnavailable);
-        }
-        let (engine, progress) = ComparisonEngine::start(store, manifest)?;
-        Ok::<_, Error>((engine, progress))
-    })
-    .await
-    .map_err(|_| Error::Ownership)?;
+    let start = start_check(worker, job.input.clone(), permit)
+        .await
+        .map_err(|_| Error::Ownership)?;
     let (mut running, mut progress) = match start {
         Ok(result) => result,
         Err(error) => {
@@ -90,9 +80,11 @@ async fn run_check(
             return Ok(());
         }
     };
+
     // Human approval budgets are metered by the market; infrastructure waits do not spend them.
     let deadline = (!job.interactive).then(|| Instant::now() + Duration::from_secs(600));
     let mut consumed = None;
+
     loop {
         if *stop.borrow()
             || !alive.load(Ordering::Relaxed)
@@ -101,6 +93,7 @@ async fn run_check(
             drop(running);
             return interrupt(repository, gateway, job).await;
         }
+
         let (status, output) = match progress {
             Progress::Waiting(value) => (JobStatus::Waiting, value),
             Progress::Complete(value) => (JobStatus::Completed, value),
@@ -110,31 +103,14 @@ async fn run_check(
         if accepted.status.terminal() {
             return Ok(());
         }
-        let (response, demo_release) = loop {
-            if *stop.borrow()
-                || !alive.load(Ordering::Relaxed)
-                || deadline.is_some_and(|deadline| Instant::now() >= deadline)
-            {
-                drop(running);
-                return interrupt(repository, gateway, job).await;
-            }
-            let current = gateway.job(job.id).await?;
-            if current.cancel_requested {
-                drop(running);
-                return interrupt(repository, gateway, job).await;
-            }
-            if current.generation != job.generation {
-                return Err(Error::Ownership);
-            }
-            if let Some(response) = current.response {
-                break (response, current.demo_release);
-            }
-            tokio::select! {
-                _ = stop.changed() => {},
-                _ = tokio::time::sleep(Duration::from_secs(1)) => {},
-            }
+
+        let response = wait_for_response(gateway, job, &alive, &mut stop, deadline).await?;
+        let Some(response) = response else {
+            drop(running);
+            return interrupt(repository, gateway, job).await;
         };
-        consumed = Some(response.id);
+
+        consumed = Some(response.reference.id);
         let permit = tokio::select! {
             permit = worker.semaphore.clone().acquire_owned() => permit.map_err(|_| Error::Ownership)?,
             _ = stop.changed() => {
@@ -142,30 +118,9 @@ async fn run_check(
                 return interrupt(repository, gateway, job).await;
             },
         };
-        let store = artifacts.clone();
-        let expected_input = job.input.clone();
-        let next = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let response: Response = store.record(&response)?;
-            let progress = if let Some(release) = demo_release {
-                if !allow_unverified_mechanics || release.input != expected_input {
-                    return Err(Error::Response);
-                }
-                #[cfg(feature = "demo-mode")]
-                {
-                    running.advance_after_demo_close(response, release.closed_at_ms)?
-                }
-                #[cfg(not(feature = "demo-mode"))]
-                {
-                    return Err(Error::Response);
-                }
-            } else {
-                running.advance(response)?
-            };
-            Ok::<_, Error>((running, progress))
-        })
-        .await
-        .map_err(|_| Error::Ownership)?;
+        let next = advance_check(worker, job, running, response, permit)
+            .await
+            .map_err(|_| Error::Ownership)?;
         match next {
             Ok((state, next)) => {
                 running = state;
@@ -182,6 +137,101 @@ async fn run_check(
             }
         }
     }
+}
+
+struct ApprovedResponse {
+    reference: ArtifactRef,
+    demo_release: Option<DemoRelease>,
+}
+
+async fn wait_for_response(
+    gateway: &Gateway,
+    job: &Job,
+    alive: &AtomicBool,
+    stop: &mut watch::Receiver<bool>,
+    deadline: Option<Instant>,
+) -> Result<Option<ApprovedResponse>> {
+    loop {
+        if *stop.borrow()
+            || !alive.load(Ordering::Relaxed)
+            || deadline.is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Ok(None);
+        }
+        let current = gateway.job(job.id).await?;
+        if current.cancel_requested {
+            return Ok(None);
+        }
+        if current.generation != job.generation {
+            return Err(Error::Ownership);
+        }
+        if let Some(response) = current.response {
+            return Ok(Some(ApprovedResponse {
+                reference: response,
+                demo_release: current.demo_release,
+            }));
+        }
+        tokio::select! {
+            _ = stop.changed() => {},
+            _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+        }
+    }
+}
+
+fn start_check(
+    worker: &Worker,
+    input: ArtifactRef,
+    permit: OwnedSemaphorePermit,
+) -> JoinHandle<Result<(ComparisonEngine, Progress)>> {
+    let store = worker.artifacts.clone();
+    let allow_unverified_mechanics = worker.allow_unverified_mechanics;
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let manifest: CheckManifest = store.record(&input)?;
+        if matches!(manifest.assurance, Assurance::HonestRoleMechanics)
+            && !allow_unverified_mechanics
+        {
+            return Err(Error::ProofUnavailable);
+        }
+        let (engine, progress) = ComparisonEngine::start(store, manifest)?;
+        Ok::<_, Error>((engine, progress))
+    })
+}
+
+fn advance_check(
+    worker: &Worker,
+    job: &Job,
+    mut running: ComparisonEngine,
+    response: ApprovedResponse,
+    permit: OwnedSemaphorePermit,
+) -> JoinHandle<Result<(ComparisonEngine, Progress)>> {
+    let store = worker.artifacts.clone();
+    let allow_unverified_mechanics = worker.allow_unverified_mechanics;
+    let ApprovedResponse {
+        reference: response,
+        demo_release,
+    } = response;
+    let expected_input = job.input.clone();
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let response: Response = store.record(&response)?;
+        let progress = if let Some(release) = demo_release {
+            if !allow_unverified_mechanics || release.input != expected_input {
+                return Err(Error::Response);
+            }
+            #[cfg(feature = "demo-mode")]
+            {
+                running.advance_after_demo_close(response, release.closed_at_ms)?
+            }
+            #[cfg(not(feature = "demo-mode"))]
+            {
+                return Err(Error::Response);
+            }
+        } else {
+            running.advance(response)?
+        };
+        Ok::<_, Error>((running, progress))
+    })
 }
 
 fn completion(
