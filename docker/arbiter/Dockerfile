@@ -6,6 +6,7 @@ COPY crates ./crates
 COPY apps/market ./apps/market
 COPY apps/arbiter ./apps/arbiter
 ARG DEMO_MODE=false
+ARG CARGO_BUILD_JOBS=1
 RUN if [ "$DEMO_MODE" = "true" ]; then \
       cargo build --locked --release --package arbiter --features demo-mode; \
     else cargo build --locked --release --package arbiter; fi

@@ -14,6 +14,7 @@ COPY apps/arbiter ./apps/arbiter
 COPY contracts/demo-nft/artifacts ./contracts/demo-nft/artifacts
 
 ARG DEMO_MODE=false
+ARG CARGO_BUILD_JOBS=1
 RUN if [ "$DEMO_MODE" = "true" ]; then \
       cargo build --locked --release --package market --features demo-mode; \
     else cargo build --locked --release --package market; fi
