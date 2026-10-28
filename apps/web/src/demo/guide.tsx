@@ -86,7 +86,7 @@ export function DemoGuide({
         <li>
           <strong>Bob and Daniel place their bids</strong>
           <p>
-            Claim local ZEC for each buyer. Bob bids 1.50 ZEC; Daniel bids 1.25
+            Claim local ZEC for each buyer. Bob bids 1.25 ZEC; Daniel bids 1.5
             ZEC. The draft allows 30 minutes for setup and bidding, followed by
             a final hour for approvals. You can adjust its end time before
             publishing. To skip the wait, return to Alice and use Close bidding
@@ -105,9 +105,9 @@ export function DemoGuide({
           </Link>
         </li>
         <li>
-          <strong>Bob pays, then Alice approves delivery</strong>
+          <strong>Daniel pays, then Alice approves delivery</strong>
           <p>
-            Bob reviews a real shielded Zcash payment. After full payment is
+            Daniel reviews a real shielded Zcash payment. After full payment is
             confirmed, Alice can approve the NFT transfer. If she lets her
             remaining time expire, the agreed timeout rule authorizes delivery.
           </p>
@@ -115,7 +115,7 @@ export function DemoGuide({
         <li>
           <strong>Verify the result</strong>
           <p>
-            Bob's portfolio shows the NFT. The transaction history shows the
+            Daniel's portfolio shows the NFT. The transaction history shows the
             Zcash payment and Ethereum delivery with their actual transaction
             IDs.
           </p>
@@ -149,7 +149,7 @@ export function DemoGuide({
             <BidForm
               key={alias}
               auction={auction}
-              initialAmount={alias === "bob" ? "1.50000000" : "1.25000000"}
+              initialAmount={alias === "bob" ? "1.25000000" : "1.50000000"}
               onComplete={query.refresh}
             />
           )}
