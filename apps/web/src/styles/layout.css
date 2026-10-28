@@ -64,7 +64,7 @@
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.24em;
-  padding: 4px 6px 4px 8px;
+  padding: 5px 6px 3px 8px;
   border: 1px solid var(--button-primary-border);
   border-radius: 3px;
   background: var(--panel);
