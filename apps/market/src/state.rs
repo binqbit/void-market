@@ -13,6 +13,7 @@ pub struct AppState {
     pub webauthn: Arc<Webauthn>,
     pub ceremonies: Arc<Ceremonies>,
     pub worker_ready: Arc<AtomicBool>,
+    pub node_ready: Arc<AtomicBool>,
     pub google: Arc<GoogleAuth>,
 }
 
@@ -30,6 +31,7 @@ impl AppState {
             webauthn: Arc::new(webauthn),
             ceremonies: Arc::new(Ceremonies::default()),
             worker_ready: Arc::new(AtomicBool::new(false)),
+            node_ready: Arc::new(AtomicBool::new(false)),
             google: Arc::new(GoogleAuth::new()?),
         })
     }

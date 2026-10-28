@@ -81,6 +81,7 @@ impl Fixture {
             kafka_brokers: env::var("TEST_KAFKA_BROKERS")
                 .unwrap_or_else(|_| "127.0.0.1:1".to_owned()),
             event_topic: "test.voidmarket.assets.events.v1".to_owned(),
+            node_event_topic: "test.voidmarket.nodes.v1".to_owned(),
             jwt_secret: vec![42; 32],
             google: None,
         };

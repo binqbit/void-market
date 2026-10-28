@@ -21,6 +21,8 @@ pub fn configure(state: AppState) -> impl FnOnce(&mut web::ServiceConfig) {
         let json = web::JsonConfig::default()
             .limit(64 * 1024)
             .error_handler(|_, _| ApiError::BadRequest("Invalid JSON request").into());
+        config.app_data(web::Data::new(state.clone()));
+        config.configure(crate::nodes::configure);
         config.service(
             web::scope("")
                 .app_data(web::Data::new(state))

@@ -1750,6 +1750,7 @@ dependencies = [
  "actix-cors",
  "actix-multipart",
  "actix-web",
+ "arbiter-protocol",
  "base64 0.22.1",
  "futures-util",
  "image",

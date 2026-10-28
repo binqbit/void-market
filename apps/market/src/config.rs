@@ -11,6 +11,7 @@ pub struct Config {
     pub media_root: PathBuf,
     pub kafka_brokers: String,
     pub event_topic: String,
+    pub node_event_topic: String,
     pub jwt_secret: Vec<u8>,
     pub google: Option<GoogleConfig>,
 }
@@ -85,6 +86,7 @@ impl Config {
             media_root: setting("MEDIA_ROOT", "./media").into(),
             kafka_brokers: setting("KAFKA_BROKERS", "127.0.0.1:9092"),
             event_topic: setting("EVENT_TOPIC", "dev.voidmarket.assets.events.v1"),
+            node_event_topic: setting("NODE_EVENT_TOPIC", "dev.voidmarket.nodes.v1"),
             jwt_secret: jwt_secret.into_bytes(),
             google,
         })

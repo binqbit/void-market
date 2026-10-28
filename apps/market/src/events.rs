@@ -15,6 +15,7 @@ struct Event {
     id: Uuid,
     kind: String,
     data: Value,
+    stream: String,
 }
 
 pub async fn record(connection: &mut PgConnection, kind: &str, data: Value) -> Result<()> {
@@ -27,6 +28,16 @@ pub async fn record(connection: &mut PgConnection, kind: &str, data: Value) -> R
     .bind(data)
     .execute(connection)
     .await?;
+    Ok(())
+}
+
+pub async fn record_node(connection: &mut PgConnection, kind: &str, data: Value) -> Result<()> {
+    sqlx::query("INSERT INTO outbox(id,kind,data,stream) VALUES($1,$2,$3,'nodes')")
+        .bind(Uuid::new_v4())
+        .bind(kind)
+        .bind(data)
+        .execute(connection)
+        .await?;
     Ok(())
 }
 
@@ -44,40 +55,62 @@ pub async fn deliver_batch(
     state: &AppState,
     producer: &FutureProducer,
 ) -> std::result::Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-    let mut tx = state.pool.begin().await?;
+    let claim = Uuid::new_v4();
     let events: Vec<Event> = sqlx::query_as(
-        "SELECT id, kind, data
-         FROM outbox
-         WHERE published_at IS NULL
-         ORDER BY created_at, id
-         LIMIT 20 FOR UPDATE SKIP LOCKED",
+        "UPDATE outbox
+             SET claim_id=$1, claim_until=now()+interval '120 seconds'
+             WHERE id IN (
+                 SELECT id FROM outbox
+                 WHERE published_at IS NULL
+                   AND (claim_until IS NULL OR claim_until<now())
+                 ORDER BY created_at, id
+                 LIMIT 20 FOR UPDATE SKIP LOCKED
+             )
+             RETURNING id, kind, data, stream",
     )
-    .fetch_all(&mut *tx)
+    .bind(claim)
+    .fetch_all(&state.pool)
     .await?;
 
     for event in &events {
-        let key = event.id.to_string();
-        let payload =
-            serde_json::to_vec(&json!({"id": event.id, "kind": event.kind, "data": event.data}))?;
-        producer
+        let key = event
+            .data
+            .get("job_id")
+            .or_else(|| event.data.get("node_id"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| event.id.to_string());
+        let payload = serde_json::to_vec(
+            &json!({"schema_version":1,"id":event.id,"kind":event.kind,"data":event.data}),
+        )?;
+        let topic = if event.stream == "nodes" {
+            &state.config.node_event_topic
+        } else {
+            &state.config.event_topic
+        };
+        let delivered = producer
             .send(
-                FutureRecord::to(&state.config.event_topic)
-                    .key(&key)
-                    .payload(&payload),
+                FutureRecord::to(topic).key(&key).payload(&payload),
                 Timeout::After(Duration::from_secs(5)),
             )
-            .await
-            .map_err(|(error, _)| error)?;
+            .await;
+        if let Err((error, _)) = delivered {
+            let _ =
+                sqlx::query("UPDATE outbox SET claim_id=NULL,claim_until=NULL WHERE claim_id=$1")
+                    .bind(claim)
+                    .execute(&state.pool)
+                    .await;
+            return Err(error.into());
+        }
         sqlx::query(
-            "UPDATE outbox SET published_at = now()
-         WHERE id = $1",
+            "UPDATE outbox SET published_at=now(), claim_id=NULL, claim_until=NULL
+             WHERE id=$1 AND claim_id=$2",
         )
         .bind(event.id)
-        .execute(&mut *tx)
+        .bind(claim)
+        .execute(&state.pool)
         .await?;
     }
-
-    tx.commit().await?;
     Ok(events.len())
 }
 
@@ -86,15 +119,23 @@ pub async fn run(
     mut stop: watch::Receiver<bool>,
 ) -> std::result::Result<(), rdkafka::error::KafkaError> {
     let producer = producer(&state.config.kafka_brokers)?;
+    let mut consumer = tokio::spawn(crate::nodes::consume(state.clone(), stop.clone()));
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     let mut tick = 0u64;
 
     loop {
         tokio::select! {
             _ = stop.changed() => break,
+            result = &mut consumer => {
+                state.worker_ready.store(false, Ordering::Relaxed);
+                state.node_ready.store(false, Ordering::Relaxed);
+                return result.unwrap_or(Err(rdkafka::error::KafkaError::Canceled));
+            }
             _ = interval.tick() => {
                 let result = deliver_batch(&state, &producer).await;
-                let ready = result.is_ok() && broker_ready(&producer, state.config.event_topic.clone()).await;
+                let ready = result.is_ok()
+                    && state.node_ready.load(Ordering::Relaxed)
+                    && broker_ready(&producer, state.config.event_topic.clone()).await;
                 state.worker_ready.store(ready, Ordering::Relaxed);
                 if let Err(error) = result {
                     tracing::warn!(error = %error, "outbox delivery will retry");
@@ -109,6 +150,9 @@ pub async fn run(
     }
 
     state.worker_ready.store(false, Ordering::Relaxed);
+    if let Ok(result) = consumer.await {
+        result?;
+    }
     Ok(())
 }
 
@@ -131,6 +175,11 @@ async fn broker_ready(producer: &FutureProducer, topic: String) -> bool {
 }
 
 async fn remove_expired_sessions(pool: &sqlx::PgPool) {
+    let _ = sqlx::query(
+        "DELETE FROM arbiter_requests WHERE created_at < now() - interval '10 minutes'",
+    )
+    .execute(pool)
+    .await;
     let result = sqlx::query("DELETE FROM sessions WHERE expires_at < now()")
         .execute(pool)
         .await;

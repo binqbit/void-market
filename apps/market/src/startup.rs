@@ -21,6 +21,32 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
         return Err("Database migrations are missing or incompatible; run migrate first".into());
     }
 
+    if matches!(
+        command,
+        "provision-node" | "enqueue-node-job" | "provide-node-response"
+    ) {
+        let path = std::env::args()
+            .nth(2)
+            .ok_or("A JSON file path is required")?;
+        let bytes = std::fs::read(path)?;
+        if bytes.len() > 64 * 1024 {
+            return Err("Node command file is too large".into());
+        }
+        match command {
+            "provision-node" => {
+                crate::nodes::provision(&pool, serde_json::from_slice(&bytes)?).await?
+            }
+            "enqueue-node-job" => {
+                crate::nodes::enqueue(&pool, serde_json::from_slice(&bytes)?).await?
+            }
+            "provide-node-response" => {
+                crate::nodes::provide_response(&pool, serde_json::from_slice(&bytes)?).await?
+            }
+            _ => unreachable!(),
+        }
+        return Ok(());
+    }
+
     tokio::fs::create_dir_all(&config.media_root).await?;
     let state = AppState::new(pool, config)?;
     let worker_mode = command == "worker";

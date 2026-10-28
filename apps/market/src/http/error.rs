@@ -59,6 +59,8 @@ impl fmt::Display for ApiError {
     }
 }
 
+impl std::error::Error for ApiError {}
+
 impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         self.response_parts().0

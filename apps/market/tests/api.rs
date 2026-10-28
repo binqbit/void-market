@@ -1,3 +1,4 @@
+mod node_cases;
 mod support;
 
 use actix_web::{
@@ -220,6 +221,7 @@ async fn ownership_transfer_retries_authorization_and_restart() {
             media_root: fixture.state.config.media_root.clone(),
             kafka_brokers: fixture.state.config.kafka_brokers.clone(),
             event_topic: fixture.state.config.event_topic.clone(),
+            node_event_topic: fixture.state.config.node_event_topic.clone(),
             jwt_secret: fixture.state.config.jwt_secret.clone(),
             google: None,
         },

@@ -22,6 +22,7 @@ x-service: &service
     DATABASE_PASSWORD_FILE: /run/secrets/database_password
     KAFKA_BROKERS: kafka:9092
     EVENT_TOPIC: ${EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
+    NODE_EVENT_TOPIC: ${NODE_EVENT_TOPIC:-dev.voidmarket.nodes.v1}
     MEDIA_ROOT: /var/lib/market/media
     JWT_SECRET_FILE: /run/secrets/jwt_secret
     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -114,18 +115,11 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
+    entrypoint: ["/opt/kafka/create-topics.sh"]
     command:
-      - --bootstrap-server
       - kafka:9092
-      - --create
-      - --if-not-exists
-      - --topic
       - ${EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
-      - --partitions
-      - "1"
-      - --replication-factor
-      - "1"
+      - ${NODE_EVENT_TOPIC:-dev.voidmarket.nodes.v1}
     restart: "no"
     networks:
       - backend
