@@ -64,6 +64,7 @@ export interface Auction {
 }
 
 export interface SaleRequest {
+  revision: number;
   payment_status?: string;
   auction_id: string;
   request_id: string;

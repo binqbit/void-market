@@ -300,6 +300,7 @@ pub async fn pending_sales(state: &AppState, account: Uuid) -> Result<Vec<SaleRe
         }
         let participant = auction.participation.ok_or(ApiError::Internal)?;
         requests.push(SaleRequest {
+            revision: auction.revision,
             payment_status: auction.payment_status,
             auction_id: id,
             request_id: auction.completion_request_id.ok_or(ApiError::Internal)?,

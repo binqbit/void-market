@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import type { MessageSnapshot } from "../../src/messages/types";
 
 const account = "00000000-0000-4000-8000-000000000001";
 const sessionId = "00000000-0000-4000-8000-000000000010";
@@ -7,7 +8,7 @@ const messageId = "00000000-0000-4000-8000-000000000020";
 const requestId = "00000000-0000-4000-8000-000000000030";
 
 async function fixture(page: Page) {
-  const snapshot = {
+  const snapshot: MessageSnapshot = {
     custody_mode: "development",
     revision: 1,
     server_time_ms: Date.now(),
@@ -266,4 +267,71 @@ test("early approvals keep the timer paused until bidding closes", async ({
   await expect(
     page.getByText(/^Waiting for bidding to close at/),
   ).toBeVisible();
+});
+
+test("new activity appears first across request types", async ({ page }) => {
+  const snapshot = await fixture(page);
+  snapshot.messages[0].revision = 30;
+  snapshot.messages[0].session_title = "Newest private request";
+  snapshot.sales = [
+    {
+      revision: 10,
+      auction_id: "sale-auction",
+      request_id: "sale-request",
+      generation: 1,
+      title: "Earlier sale",
+      price: "1.25000000",
+      buyer: { address: account, name: "Buyer", username: "buyer" },
+      remaining_ms: 600000,
+      timer_running: false,
+      payment_status: "confirmed",
+    },
+  ];
+  snapshot.transactions = [
+    {
+      id: "payment-request",
+      account_id: account,
+      auction_id: "payment-auction",
+      asset_id: null,
+      kind: "payment",
+      status: "ready",
+      network: "zcash",
+      title: "Pay the auction invoice",
+      transaction_id: null,
+      ethereum_transaction: null,
+      nft: null,
+      amount: "1.50000000",
+      fee: "0.00010000",
+      recipient: "local-test-recipient",
+      error: null,
+      revision: 20,
+      can_approve: true,
+      remaining_ms: 600000,
+      timer_running: false,
+      confirmation: null,
+    },
+  ];
+  snapshot.pending = 3;
+
+  await page.goto("/messages");
+  const feed = page.getByRole("region", { name: "Awaiting your approval" });
+  const titles = feed.locator("article h2, article h3");
+  await expect(titles).toHaveText([
+    "Contribute your privacy mask",
+    "Pay the auction invoice",
+    "Approve the sale transfer",
+  ]);
+
+  snapshot.transactions[0].revision = 40;
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("test-messages-hint")),
+  );
+  await expect(titles).toHaveText([
+    "Pay the auction invoice",
+    "Contribute your privacy mask",
+    "Approve the sale transfer",
+  ]);
+  await expect(
+    feed.getByRole("button", { name: "Approve", exact: true }),
+  ).toBeEnabled();
 });

@@ -7,32 +7,24 @@ import { SessionCard } from "../messages/session-card";
 import { useMessages } from "../messages/provider";
 import { SaleCard } from "../messages/sale-card";
 import { TransactionCard } from "../demo/transaction-card";
+import { inboxEntries, needsApproval } from "../messages/inbox";
+import type { InboxEntry } from "../messages/inbox";
 
 export function MessagesPage() {
   const session = useSession();
   const { snapshot, loading, error, refresh } = useMessages();
   if (session.loading) return <Loading>Loading your account…</Loading>;
   if (!session.profile) return <Navigate to="/login" replace />;
-  const pending =
-    snapshot?.messages.filter(
-      (item) =>
-        item.status === "ready" &&
-        item.participant_status === "active" &&
-        item.session_status === "active",
-    ) ?? [];
+  const pending = snapshot?.messages.filter(needsApproval) ?? [];
   const history =
-    snapshot?.messages.filter(
-      (item) => !pending.some((active) => active.id === item.id),
-    ) ?? [];
+    snapshot?.messages
+      .filter((item) => !pending.some((active) => active.id === item.id))
+      .sort((left, right) => right.revision - left.revision) ?? [];
   const sessions =
     snapshot?.sessions.filter(
       (item) => !pending.some((message) => message.session_id === item.id),
     ) ?? [];
-  const sales = snapshot?.sales ?? [];
-  const native =
-    snapshot?.transactions?.filter(
-      (item) => !["confirmed", "cancelled"].includes(item.status),
-    ) ?? [];
+  const entries = inboxEntries(snapshot);
 
   return (
     <div className="page-width page-content messages-page">
@@ -61,16 +53,10 @@ export function MessagesPage() {
       {error && <ErrorNotice retry={() => void refresh()}>{error}</ErrorNotice>}
       {loading && !snapshot ? (
         <Loading>Loading messages…</Loading>
-      ) : pending.length || sales.length || native.length ? (
+      ) : entries.length ? (
         <section className="message-list" aria-label="Awaiting your approval">
-          {native.map((item) => (
-            <TransactionCard key={item.id} item={item} />
-          ))}
-          {sales.map((item) => (
-            <SaleCard key={item.auction_id} item={item} />
-          ))}
-          {pending.map((item) => (
-            <MessageCard key={item.id} item={item} />
+          {entries.map((entry) => (
+            <InboxCard key={entry.key} entry={entry} />
           ))}
         </section>
       ) : (
@@ -100,4 +86,15 @@ export function MessagesPage() {
       )}
     </div>
   );
+}
+
+function InboxCard({ entry }: { entry: InboxEntry }) {
+  switch (entry.kind) {
+    case "message":
+      return <MessageCard item={entry.item} />;
+    case "sale":
+      return <SaleCard item={entry.item} />;
+    case "transaction":
+      return <TransactionCard item={entry.item} />;
+  }
 }
