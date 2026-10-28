@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Void Market</title>
+  <defs>
+    <linearGradient
+      id="envelope"
+      x1="9"
+      y1="14"
+      x2="56"
+      y2="51"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#CEFF74" />
+      <stop offset="0.52" stop-color="#BCFF62" />
+      <stop offset="1" stop-color="#A8EE54" />
+    </linearGradient>
+    <linearGradient
+      id="lock"
+      x1="25"
+      y1="24"
+      x2="38"
+      y2="42"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#D2FF83" />
+      <stop offset="1" stop-color="#B5F861" />
+    </linearGradient>
+  </defs>
+  <g transform="rotate(11 32 32)">
+    <rect x="5" y="13" width="54" height="38" rx="4.5" fill="url(#envelope)" />
+    <path
+      d="M7 16L27 34C29.8 36.5 34.2 36.5 37 34L57 16M7 49L24 35M40 35L57 49"
+      stroke="#10120F"
+      stroke-width="3.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="32" cy="32" r="13.5" fill="#10120F" />
+    <path
+      d="M27 30V26.5C27 23.7 29.2 21.5 32 21.5C34.8 21.5 37 23.7 37 26.5V30"
+      stroke="url(#lock)"
+      stroke-width="2.8"
+      stroke-linecap="round"
+    />
+    <rect x="24.5" y="29" width="15" height="13" rx="2" fill="url(#lock)" />
+    <path
+      d="M34 34.5C34 33.4 33.1 32.5 32 32.5C30.9 32.5 30 33.4 30 34.5C30 35.2 30.4 35.9 31 36.2L30.3 39H33.7L33 36.2C33.6 35.9 34 35.2 34 34.5Z"
+      fill="#10120F"
+    />
+  </g>
+</svg>

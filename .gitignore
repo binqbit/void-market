@@ -11,4 +11,13 @@
 *.sqlite3
 *.db
 /target/
-/node_modules/
+
+# Frontend dependencies and generated files.
+node_modules/
+node_modules/
+/apps/web/dist/
+/apps/web/.vite/
+/apps/web/coverage/
+/apps/web/playwright-report/
+/apps/web/test-results/
+*.tsbuildinfo

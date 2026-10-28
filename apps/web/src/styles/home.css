@@ -1,0 +1,230 @@
+.hero {
+  padding-block: 98px 78px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 54px;
+  align-items: center;
+}
+.hero h1 {
+  font-size: clamp(45px, 4.8vw, 70px);
+  line-height: 1.06;
+  margin-block: 24px;
+  letter-spacing: -0.06em;
+}
+.hero h1 em {
+  text-shadow: var(--text-glow);
+}
+.hero-lead {
+  max-width: 445px;
+  font-size: 15px;
+  line-height: 1.85;
+  margin-bottom: 30px;
+}
+.hero-footnote {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 23px;
+}
+.protocol-art {
+  min-height: 500px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 50%, var(--glow), transparent 68%),
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size:
+    auto,
+    42px 42px,
+    42px 42px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  isolation: isolate;
+}
+.protocol-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent, var(--bg) 80%);
+  z-index: -1;
+}
+.art-topline {
+  position: absolute;
+  inset: 23px 23px auto;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+  color: var(--muted);
+}
+.orbital {
+  position: absolute;
+  width: 288px;
+  height: 288px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  top: 68px;
+  left: calc(50% - 144px);
+}
+.orbital-two {
+  width: 196px;
+  height: 196px;
+  top: 113px;
+  left: calc(50% - 98px);
+  border-style: dashed;
+}
+.cipher-core {
+  position: absolute;
+  top: 157px;
+  left: calc(50% - 48px);
+  text-align: center;
+  width: 96px;
+  color: var(--accent);
+}
+.cipher-core > div {
+  display: grid;
+  place-items: center;
+  height: 96px;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+  border-radius: 25px;
+  box-shadow:
+    inset 0 0 18px var(--aura-soft),
+    0 0 26px var(--aura),
+    0 0 70px var(--aura-soft);
+}
+.cipher-core > span {
+  font-size: 7px;
+  letter-spacing: 0.13em;
+  display: block;
+  margin-top: 11px;
+  text-shadow: var(--text-glow);
+}
+.cipher-card {
+  position: absolute;
+  width: 153px;
+  padding: 14px 17px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.cipher-card.seller {
+  left: 22px;
+  top: 87px;
+  transform: rotate(-6deg);
+}
+.cipher-card.buyer {
+  right: 20px;
+  top: 236px;
+  transform: rotate(5deg);
+}
+.art-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+}
+.art-label svg {
+  color: var(--accent);
+}
+.cipher-description {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.cipher-number {
+  color: var(--accent);
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+  text-shadow: 0 0 16px var(--aura-strong);
+}
+.cipher-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.art-result {
+  position: absolute;
+  inset: auto 25px 55px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+}
+.art-result strong {
+  color: var(--text);
+  font-size: 11px;
+  display: block;
+  font-weight: 500;
+}
+.art-result span {
+  font-size: 8px;
+  color: var(--muted);
+}
+.art-caption {
+  position: absolute;
+  bottom: 22px;
+  width: 100%;
+  text-align: center;
+  font-size: 8px;
+  color: var(--muted);
+}
+.principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px;
+  padding-block: 41px 58px;
+  border-top: 1px solid var(--line);
+}
+.feature-icon {
+  color: var(--accent);
+  display: flex;
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 8px var(--aura));
+}
+.principles h2 {
+  font-size: 19px;
+  margin-bottom: 13px;
+  letter-spacing: -0.03em;
+}
+.principles p {
+  font-size: 13px;
+  line-height: 1.85;
+  margin-bottom: 0;
+}
+.home-bottom {
+  margin-block: 0 68px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 34px 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.home-bottom h2 {
+  font-size: 29px;
+  margin-block: 10px 12px;
+}
+.home-bottom p {
+  margin: 0;
+  font-size: 13px;
+}
