@@ -19,15 +19,25 @@ from rpc import Rpc
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def set_private_permissions(path, values):
+    uid, gid = int(values["LOCAL_UID"]), int(values["LOCAL_GID"])
+    metadata = path.stat()
+    path.chmod(0o700 if path.is_dir() else 0o600)
+
+    # sudo may create files as root while containers retain the original UID.
+    if (metadata.st_uid, metadata.st_gid) != (uid, gid):
+        os.chown(path, uid, gid)
+
+
 def save(path, values):
     path.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
-    path.chmod(0o600)
+    set_private_permissions(path, values)
 
 
 def prepare_secret_files(state, values):
     directory = state / "secrets"
     directory.mkdir(mode=0o700, exist_ok=True)
-    directory.chmod(0o700)
+    set_private_permissions(directory, values)
 
     for name in ("DATABASE_PASSWORD", "JWT_SECRET", "ARBITER_DATABASE_PASSWORD"):
         file_variable = name + "_FILE"
@@ -42,9 +52,8 @@ def prepare_secret_files(state, values):
         else:
             raise RuntimeError(f"Restore the retained {file_variable} before restarting")
 
-        # Application containers use the host UID. PostgreSQL reads its secret
-        # as root before switching to its database user.
-        path.chmod(0o600)
+        # PostgreSQL reads its secret as root before switching to its database user.
+        set_private_permissions(path, values)
         values[file_variable] = str(path)
         values.pop(name, None)
 
@@ -103,6 +112,12 @@ def main():
         raise SystemExit("This localnet has not been initialized. Run up first.")
 
     prepare_secret_files(state, values)
+    for name in (
+        "CUSTODY_MASTER_KEY_FILE",
+        "ARBITER_SIGNING_KEY_FILE",
+        "ARBITER_SERVICE_TOKEN_FILE",
+    ):
+        set_private_permissions(Path(values[name]), values)
     save(env_file, values)
 
     command = ["docker", "compose", "--env-file", str(env_file)]
@@ -136,6 +151,12 @@ def main():
     rpc = Rpc(f"http://127.0.0.1:{values['ETHEREUM_RPC_PORT']}")
     identity_parent = state / "identity-parent"
     identity = identity_parent / "node"
+    set_private_permissions(identity_parent, values)
+    if identity.exists():
+        set_private_permissions(identity, values)
+        for name in ("node.json", "signing.key", "service.token"):
+            set_private_permissions(identity / name, values)
+
     if not (identity / "node.json").exists():
         address = rpc.call("eth_accounts")[4]
         subprocess.run(
@@ -171,6 +192,7 @@ def main():
     provision["token_file"] = "/run/secrets/arbiter_service_token"
     local_provision = state / "secrets" / "node.json"
     local_provision.write_text(json.dumps(provision))
+    set_private_permissions(local_provision, values)
     compose("run", "--rm", "--no-deps", "kafka-init")
     compose("run", "--rm", "--no-deps", "migrate")
     compose(
