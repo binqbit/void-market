@@ -12,4 +12,5 @@ Void Market brings private price discovery and coordinated asset exchange into o
 - [How it works](docs/how-it-works.md)
 - [Plain-language explanation](docs/protocol-explained.md)
 - [Cryptographic protocol](docs/cryptographic-protocol.md)
+- [Protocol by Example](docs/protocol-by-example.md)
 - [Design decisions](docs/design-decisions.md)
