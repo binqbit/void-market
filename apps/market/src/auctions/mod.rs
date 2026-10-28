@@ -10,7 +10,6 @@ mod routes;
 mod service;
 mod worker;
 
-pub(crate) use clock::REQUIRED_WINDOW_MS;
 pub(crate) use clock::{meter, refresh_charging, tick};
 pub(crate) use inputs::amount as participant_amount;
 pub(crate) use participation::exclude;

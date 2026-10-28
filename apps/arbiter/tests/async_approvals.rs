@@ -35,7 +35,7 @@ async fn masks(fixture: &Trading, owner: usize, expected: usize) -> Vec<Value> {
 
 #[actix_web::test]
 #[ignore = "requires PostgreSQL and fresh Kafka topics; real HE account keys"]
-async fn early_requests_are_independent_and_do_not_consume_the_final_hour_budget() {
+async fn early_requests_are_independent_and_do_not_consume_the_approval_budget() {
     let fixture = Trading::new(3).await;
     let asset = Uuid::new_v4();
     fixture

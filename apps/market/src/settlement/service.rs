@@ -36,8 +36,9 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
     };
     let (remaining_ms, timer_running) = if let Some(auction) = operation.auction_id {
         let row:Option<(i64,bool)>=sqlx::query_as(
-            "SELECT p.remaining_ms,p.chargeable AND COALESCE(r.healthy AND r.last_tick_ms>$3-5000,FALSE) FROM
-         auction_participants p LEFT JOIN localnet_runtime r ON r.singleton WHERE p.auction_id=$1 AND
+            "SELECT p.remaining_ms,p.chargeable AND a.closes_at_ms<=$3 AND COALESCE(r.healthy AND r.last_tick_ms>$3-5000,FALSE) FROM
+         auction_participants p JOIN auctions a ON a.id=p.auction_id
+         LEFT JOIN localnet_runtime r ON r.singleton WHERE p.auction_id=$1 AND
          p.account_id=$2",
         )
         .bind(auction)

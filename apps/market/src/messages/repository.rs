@@ -155,11 +155,16 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     for row in rows {
         let running = row.chargeable
             && row.clock_healthy
+            && row.closes_at_ms.is_none_or(|close| now >= close)
             && row.participant_status == "active"
             && row.session_status == "active";
         let elapsed = if running {
-            now.saturating_sub(row.last_tick_ms.unwrap_or(now))
-                .clamp(0, 5000)
+            now.saturating_sub(
+                row.last_tick_ms
+                    .unwrap_or(now)
+                    .max(row.closes_at_ms.unwrap_or(i64::MIN)),
+            )
+            .clamp(0, 5000)
         } else {
             0
         };
@@ -182,9 +187,7 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
             revision: row.revision,
             stage,
             step,
-            required_from_ms: row
-                .closes_at_ms
-                .map(|close| close.saturating_sub(crate::auctions::REQUIRED_WINDOW_MS)),
+            required_from_ms: row.closes_at_ms,
             closes_at_ms: row.closes_at_ms,
             status: row.status,
             participant_status: row.participant_status,
@@ -208,7 +211,7 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
         "SELECT s.id, s.title, s.auction_id, (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
          s.status, COALESCE(p.status,m.status) AS participation_status,
          COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
-         (COALESCE(p.chargeable,m.chargeable) AND COALESCE(r.healthy AND
+         (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms<=$2) AND COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running,
          CASE WHEN x.status='open' AND s.response_ref IS NOT NULL THEN x.closes_at_ms END AS waiting_until_ms FROM

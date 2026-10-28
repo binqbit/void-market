@@ -252,7 +252,7 @@ pub async fn publish(
         serde_json::Value::Null
     };
     let policy = inputs::digest(
-        "AUCTION_POLICY_V2",
+        "AUCTION_POLICY_V3",
         &(
             id,
             &snapshot,
@@ -264,7 +264,7 @@ pub async fn publish(
             "bid_ge_reserve",
             "earliest_admission",
             "early_masks_postclose_decryption",
-            (super::clock::REQUIRED_WINDOW_MS, 600_000),
+            ("approval_budget_after_bidding_closes", 600_000),
             if auction.execution == "localnet" {
                 "native_payment_then_seller_ack_or_timeout"
             } else {

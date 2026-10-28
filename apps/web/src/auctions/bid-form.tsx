@@ -87,8 +87,8 @@ export function BidForm({
           <p>
             You have one immutable bid. You may withdraw, but cannot bid again.
             Requests can arrive in Messages immediately. Required availability
-            begins one hour before bidding closes; your 10-minute response
-            budget is shared across the auction.
+            begins when bidding closes; your 10-minute response budget is shared
+            across the auction.
           </p>
           <p>
             {auction.execution === "localnet_custody"

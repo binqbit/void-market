@@ -103,16 +103,15 @@ export function AuctionPage() {
                   approve them now; required availability begins at{" "}
                   <strong>
                     {new Date(
-                      auction.required_from_ms ??
-                        auction.closes_at_ms - 3600000,
+                      auction.required_from_ms ?? auction.closes_at_ms,
                     ).toLocaleString()}
                   </strong>
                   .
                 </p>
                 <p>
-                  During the final hour and final checks, your shared 10-minute
-                  budget runs only while a response is needed from you. The
-                  timer pauses while you wait for others or the service.
+                  After bidding closes, your shared 10-minute budget runs only
+                  while a response is needed from you. The timer pauses while
+                  you wait for others or the service.
                 </p>
                 {own?.status === "active" && (
                   <Link className="button" to="/messages">
@@ -255,9 +254,9 @@ export function AuctionPage() {
                 does not free a place.
               </li>
               <li>
-                Prepare approvals at any time. From one hour before bidding
-                closes, you have 10 minutes total for required responses across
-                the auction. Service and dependency waits pause the budget.
+                Prepare approvals at any time. Once bidding closes, you have 10
+                minutes total for required responses across the auction. Service
+                and dependency waits pause the budget.
               </li>
               <li>
                 {native

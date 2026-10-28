@@ -87,7 +87,7 @@ async fn overlapping_ready_obligations_charge_one_shared_interval() {
     .unwrap();
     sqlx::query(
         "UPDATE auctions SET status='matching',generation=1,input_root=$2,round_root=$2,
-         clock_epoch=$3,last_tick_ms=$4 WHERE id=$1",
+         clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4 WHERE id=$1",
     )
     .bind(auction)
     .bind(vec![8u8; 32])
@@ -150,7 +150,7 @@ async fn overlapping_ready_obligations_charge_one_shared_interval() {
 
 #[actix_web::test]
 #[ignore = "requires TEST_DATABASE_URL"]
-async fn early_approval_does_not_start_the_budget_before_the_final_hour() {
+async fn early_approval_does_not_start_the_budget_before_bidding_closes() {
     let fixture = Fixture::with_custody().await;
     let seller = fixture.register("Seller").await;
     let buyer = fixture.register("Early buyer").await;
@@ -164,19 +164,28 @@ async fn early_approval_does_not_start_the_budget_before_the_final_hour() {
         .bind(epoch).bind(tick).execute(&fixture.state.pool).await.unwrap();
     sqlx::query("UPDATE auctions SET closes_at_ms=$2,clock_epoch=$3,last_tick_ms=$4 WHERE id=$1")
         .bind(auction)
-        .bind(tick + 7_200_000)
+        .bind(tick + 60_000)
         .bind(epoch)
         .bind(tick - 1000)
         .execute(&fixture.state.pool)
         .await
         .unwrap();
+    // A pre-upgrade charging flag must not consume time before the close.
+    sqlx::query(
+        "UPDATE auction_participants SET chargeable=TRUE WHERE auction_id=$1 AND account_id=$2",
+    )
+    .bind(auction)
+    .bind(buyer.address)
+    .execute(&fixture.state.pool)
+    .await
+    .unwrap();
     let snapshot = fixture
         .request("GET", "/v1/messages", Some(&buyer.cookie), Value::Null)
         .await
         .2;
     let request = &snapshot["messages"][0];
     assert_eq!(request["timer_running"], false);
-    assert_eq!(request["required_from_ms"], tick + 3_600_000);
+    assert_eq!(request["required_from_ms"], tick + 60_000);
     let approved = fixture
         .request(
             "POST",
@@ -408,7 +417,7 @@ async fn auction_expiry_cancels_the_round_without_resetting_other_participants()
     .unwrap();
     sqlx::query(
         "UPDATE auctions SET status='matching',generation=1,input_root=$2,round_root=$2,
-        clock_epoch=$3,last_tick_ms=$4 WHERE id=$1",
+        clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4 WHERE id=$1",
     )
     .bind(auction)
     .bind(vec![8u8; 32])

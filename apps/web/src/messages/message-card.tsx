@@ -139,7 +139,7 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
             {connectionError
               ? "Connection lost. Remaining time will be confirmed when you reconnect."
               : early
-                ? `You can approve now. Your timer starts only when a response is needed from ${new Date(item.required_from_ms!).toLocaleString()}.`
+                ? `You can approve now. Your timer starts only after bidding closes at ${new Date(item.required_from_ms!).toLocaleString()}, while a response is needed from you.`
                 : item.timer_running
                   ? "Time is shared across all your approval steps. When it runs out, you are disqualified from this session."
                   : "Timer paused while the service is waiting. Your remaining time is preserved."}

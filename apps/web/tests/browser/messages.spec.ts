@@ -231,15 +231,15 @@ test("a failed refresh marks the timer as unconfirmed", async ({ page }) => {
   ).toBeEnabled();
 });
 
-test("early approvals explain the final-hour timer without starting it", async ({
+test("early approvals keep the timer paused until bidding closes", async ({
   page,
 }) => {
   const snapshot = await fixture(page);
   Object.assign(snapshot.messages[0], {
     auction_id: "00000000-0000-4000-8000-000000000050",
     step: 1,
-    required_from_ms: Date.now() + 3_600_000,
-    closes_at_ms: Date.now() + 7_200_000,
+    required_from_ms: Date.now() + 60_000,
+    closes_at_ms: Date.now() + 60_000,
     timer_running: false,
   });
   await page.goto("/messages");
@@ -249,7 +249,7 @@ test("early approvals explain the final-hour timer without starting it", async (
     page.getByText("approval time left in this auction"),
   ).toBeVisible();
   await expect(
-    page.getByText(/You can approve now\. Your timer starts only/),
+    page.getByText(/Your timer starts only after bidding closes/),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),

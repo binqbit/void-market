@@ -161,10 +161,15 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
                 || (auction.payment_status == "confirmed" && auction.custody_status == "held")),
     };
     let participation = own.map(|member| {
-        let running = member.chargeable && healthy && own_active;
+        let running = member.chargeable && healthy && own_active && now >= auction.closes_at_ms;
         let elapsed = if running {
-            now.saturating_sub(auction.last_tick_ms.unwrap_or(now))
-                .clamp(0, 5000)
+            now.saturating_sub(
+                auction
+                    .last_tick_ms
+                    .unwrap_or(now)
+                    .max(auction.closes_at_ms),
+            )
+            .clamp(0, 5000)
         } else {
             0
         };
@@ -200,9 +205,7 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         payment,
         wallet_ready,
         closes_at_ms: auction.closes_at_ms,
-        required_from_ms: auction
-            .closes_at_ms
-            .saturating_sub(super::clock::REQUIRED_WINDOW_MS),
+        required_from_ms: auction.closes_at_ms,
         created_at_ms: auction.created_at_ms,
         published_at_ms: auction.published_at_ms,
         finished_at_ms: auction.finished_at_ms,
