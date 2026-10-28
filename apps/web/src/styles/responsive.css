@@ -67,7 +67,7 @@
     max-width: 540px;
   }
   .hero h1 {
-    font-size: 64px;
+    font-size: 58px;
   }
   .protocol-art {
     width: 100%;
@@ -180,7 +180,7 @@
     padding-top: 45px;
   }
   .hero h1 {
-    font-size: 53px;
+    font-size: 48px;
   }
   .hero-lead {
     font-size: 14px;
@@ -325,6 +325,9 @@
   }
 }
 @media (max-width: 360px) {
+  .hero h1 {
+    font-size: 43px;
+  }
   .header-actions .button {
     max-width: 86px;
   }

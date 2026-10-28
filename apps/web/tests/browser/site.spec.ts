@@ -60,7 +60,7 @@ test("navigation, dark default and explicit theme survive reload without overflo
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Your assets",
+    "Trade privately,",
   );
   await expect(
     page.getByRole("button", { name: /Switch to .+ theme/ }),

@@ -20,16 +20,13 @@ export function HomePage() {
             <span className="status-dot" /> Built around privacy
           </span>
           <h1>
-            Your assets.
+            Trade privately,
             <br />
-            Your next move.
-            <br />
-            <em>On your terms.</em>
+            <em>from offer to&nbsp;payment.</em>
           </h1>
           <p className="hero-lead">
-            A home for your digital assets. A new approach to markets, where
-            encrypted bids can be compared without putting everyone’s number on
-            display.
+            Buy and sell digital assets with hidden bids, private reserve prices
+            and shielded Zcash payments.
           </p>
           <div className="button-row">
             <Link className="button primary" to="/market">
