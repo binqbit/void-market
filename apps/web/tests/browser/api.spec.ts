@@ -13,6 +13,7 @@ interface Fixture {
 test("real API: image upload, asset ownership, transfer receipt and sign-out", async ({
   page,
   browser,
+  baseURL,
 }, testInfo) => {
   test.skip(
     !process.env.WEB_API_FIXTURE_FILE || testInfo.project.name !== "desktop",
@@ -79,7 +80,7 @@ test("real API: image upload, asset ownership, transfer receipt and sign-out", a
     page.getByText("Asset sent", { exact: true }).first(),
   ).toBeVisible();
 
-  const other = await browser.newContext();
+  const other = await browser.newContext({ baseURL });
   try {
     await other.addCookies([
       {
@@ -92,7 +93,7 @@ test("real API: image upload, asset ownership, transfer receipt and sign-out", a
       },
     ]);
     const recipient = await other.newPage();
-    await recipient.goto("http://localhost:3000/portfolio");
+    await recipient.goto("/portfolio");
     await expect(
       recipient.getByRole("heading", { name, exact: true }),
     ).toBeVisible();
