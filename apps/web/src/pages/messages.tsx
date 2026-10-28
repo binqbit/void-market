@@ -5,6 +5,7 @@ import { ErrorNotice, Loading } from "../components/feedback";
 import { MessageCard } from "../messages/message-card";
 import { SessionCard } from "../messages/session-card";
 import { useMessages } from "../messages/provider";
+import { SaleCard } from "../messages/sale-card";
 
 export function MessagesPage() {
   const session = useSession();
@@ -26,6 +27,7 @@ export function MessagesPage() {
     snapshot?.sessions.filter(
       (item) => !pending.some((message) => message.session_id === item.id),
     ) ?? [];
+  const sales = snapshot?.sales ?? [];
 
   return (
     <div className="page-width page-content messages-page">
@@ -54,8 +56,11 @@ export function MessagesPage() {
       {error && <ErrorNotice retry={() => void refresh()}>{error}</ErrorNotice>}
       {loading && !snapshot ? (
         <Loading>Loading messages…</Loading>
-      ) : pending.length ? (
+      ) : pending.length || sales.length ? (
         <section className="message-list" aria-label="Awaiting your approval">
+          {sales.map((item) => (
+            <SaleCard key={item.auction_id} item={item} />
+          ))}
           {pending.map((item) => (
             <MessageCard key={item.id} item={item} />
           ))}

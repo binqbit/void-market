@@ -6,6 +6,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { message, post } from "../api/client";
 import { Dialog } from "../components/dialog";
 import { ErrorNotice } from "../components/feedback";
@@ -98,6 +99,11 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
         <span className="eyebrow">{item.session_title}</span>
         <span className="message-stage">Step {stage.step} of 5</span>
       </div>
+      {item.auction_id && (
+        <Link className="text-link" to={`/market/${item.auction_id}`}>
+          View auction
+        </Link>
+      )}
       <div className="message-title">
         <span className="message-symbol" aria-hidden="true">
           {actionable ? <ShieldCheck size={22} /> : <CheckCheck size={22} />}
@@ -142,13 +148,15 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
                   ? "Checking deadline…"
                   : "Approve"}
             </button>
-            <button
-              className="quiet-button"
-              disabled={busy}
-              onClick={() => setWithdraw(true)}
-            >
-              Withdraw bid
-            </button>
+            {item.can_withdraw !== false && (
+              <button
+                className="quiet-button"
+                disabled={busy}
+                onClick={() => setWithdraw(true)}
+              >
+                Withdraw bid
+              </button>
+            )}
           </div>
         </>
       )}

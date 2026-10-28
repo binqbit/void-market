@@ -1,0 +1,400 @@
+import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import type { Auction } from "../../src/auctions/types";
+
+const seller = {
+  address: "00000000-0000-4000-8000-000000000001",
+  name: "Seller",
+  username: "seller",
+};
+const buyer = {
+  address: "00000000-0000-4000-8000-000000000002",
+  name: "Buyer",
+  username: "buyer",
+};
+const id = "00000000-0000-4000-8000-000000000010";
+const assetId = "00000000-0000-4000-8000-000000000020";
+const completion = "00000000-0000-4000-8000-000000000030";
+
+function auction(): Auction {
+  return {
+    id,
+    asset: {
+      id: assetId,
+      name: "The quiet signal",
+      description: "A collectible with a real description.",
+      image: null,
+    },
+    seller,
+    winner: null,
+    status: "open",
+    reason: null,
+    currency: "ZEC",
+    execution: "development_custody",
+    payment_status: "unverified",
+    wallet_ready: true,
+    closes_at_ms: Date.now() + 86400000,
+    created_at_ms: Date.now(),
+    published_at_ms: Date.now(),
+    finished_at_ms: null,
+    revision: 7,
+    policy_hash: "fixture-policy",
+    buyer_limit: 3,
+    admitted_buyers: 0,
+    active_buyers: 0,
+    generation: 0,
+    checks_completed: 0,
+    checks_total: 0,
+    reserve: null,
+    your_bid: null,
+    agreed_price: null,
+    participation: null,
+    completion_request_id: null,
+    actions: {
+      edit: false,
+      publish: false,
+      cancel: false,
+      bid: true,
+      withdraw: false,
+      complete: false,
+    },
+  };
+}
+
+async function fixture(
+  page: Page,
+  role: "seller" | "buyer" | "public",
+  data: Auction,
+) {
+  await page.addInitScript(() => {
+    class Events extends EventTarget {
+      close() {}
+    }
+    Object.defineProperty(window, "EventSource", { value: Events });
+  });
+  await page.route("**/api/v1/me", (route) =>
+    role === "public"
+      ? route.fulfill({ status: 401, json: { message: "Sign in first" } })
+      : route.fulfill({
+          json: {
+            ...(role === "seller" ? seller : buyer),
+            email: "fixture@example.test",
+          },
+        }),
+  );
+  const snapshot = {
+    custody_mode: "development",
+    revision: 1,
+    server_time_ms: Date.now(),
+    pending: 0,
+    messages: [],
+    sessions: [],
+    sales: [] as unknown[],
+  };
+  await page.route("**/api/v1/messages", (route) =>
+    route.fulfill({ json: snapshot }),
+  );
+  await page.route("**/api/v1/auctions?*", (route) =>
+    route.fulfill({ json: [data] }),
+  );
+  await page.route(`**/api/v1/auctions/${id}`, (route) =>
+    route.fulfill({ json: data }),
+  );
+  await page.route("**/api/v1/me/assets?*", (route) =>
+    route.fulfill({
+      json: [
+        {
+          ...data.asset,
+          owner_id: seller.address,
+          active_auction_id: null,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }),
+  );
+  await page.route("**/api/v1/me/auctions?*", (route) =>
+    route.fulfill({ json: [data] }),
+  );
+  return snapshot;
+}
+
+test("catalog and public auction show rules without private prices", async ({
+  page,
+}, info) => {
+  const data = auction();
+  data.actions.bid = false;
+  await fixture(page, "public", data);
+  await page.goto("/market");
+  await expect(
+    page.getByRole("heading", { name: data.asset.name }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "View auction", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: data.asset.name, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Sign in to bid" }),
+  ).toBeVisible();
+  await expect(page.getByText("Your private reserve")).toHaveCount(0);
+  await page.getByText("Auction rules", { exact: true }).click();
+  await expect(
+    page.getByText("Equal bids favor the earlier admitted bid."),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({
+    path: info.outputPath("auction-public.png"),
+    fullPage: true,
+  });
+});
+
+test("bid review preserves the exact decimal string and retry identity", async ({
+  page,
+}) => {
+  const data = auction();
+  await fixture(page, "buyer", data);
+  const requests: unknown[] = [];
+  await page.route(`**/api/v1/auctions/${id}/bids`, async (route) => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) {
+      await route.fulfill({
+        status: 503,
+        json: { message: "Temporarily unavailable" },
+      });
+      return;
+    }
+    data.your_bid = "90071992.54740993";
+    data.actions.bid = false;
+    data.actions.withdraw = true;
+    data.participation = {
+      status: "active",
+      remaining_ms: 600000,
+      timer_running: false,
+      created_at_ms: Date.now(),
+    };
+    await route.fulfill({ status: 202, json: data });
+  });
+  await page.goto(`/market/${id}`);
+  await page
+    .getByLabel("Your bid · ZEC", { exact: true })
+    .fill("90071992.54740993");
+  await page.getByRole("button", { name: "Review bid" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("90071992.54740993 ZEC");
+  await dialog.getByRole("button", { name: "Confirm bid" }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Temporarily unavailable",
+  );
+  await dialog.getByRole("button", { name: "Confirm bid" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Review bid" })).toHaveCount(0);
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toEqual(requests[1]);
+  expect((requests[1] as { amount: string }).amount).toBe("90071992.54740993");
+});
+
+test("portfolio draft requires explicit publish consent", async ({ page }) => {
+  const data = auction();
+  data.status = "draft";
+  data.reserve = "1.25000000";
+  data.published_at_ms = null;
+  data.actions = {
+    edit: true,
+    publish: true,
+    cancel: true,
+    bid: false,
+    withdraw: false,
+    complete: false,
+  };
+  await fixture(page, "seller", data);
+  await page.route("**/api/v1/auctions", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.reserve).toBe("1.25000000");
+    data.closes_at_ms = body.closes_at_ms;
+    await route.fulfill({ status: 201, json: data });
+  });
+  let consent: unknown = null;
+  await page.route(`**/api/v1/auctions/${id}/publish`, async (route) => {
+    consent = route.request().postDataJSON();
+    data.status = "open";
+    data.actions = {
+      edit: false,
+      publish: false,
+      cancel: false,
+      bid: false,
+      withdraw: false,
+      complete: false,
+    };
+    await route.fulfill({ json: data });
+  });
+  await page.goto("/portfolio");
+  await page.getByRole("button", { name: "Sell asset", exact: true }).click();
+  await page
+    .getByLabel("Private reserve price · ZEC", { exact: true })
+    .fill("1.25000000");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page).toHaveURL(new RegExp(`/market/${id}$`));
+  const publish = page.getByRole("button", { name: "Publish auction" });
+  await expect(publish).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await publish.click();
+  await expect(page.getByText("Open for bids", { exact: true })).toBeVisible();
+  expect(consent).toEqual({ revision: 7, consent: true });
+});
+
+test("seller completes from Messages with payment explicitly unverified", async ({
+  page,
+}, info) => {
+  const data = auction();
+  data.status = "awaiting_completion";
+  data.winner = buyer;
+  data.agreed_price = "1.25000000";
+  data.generation = 1;
+  data.completion_request_id = completion;
+  data.actions = {
+    edit: false,
+    publish: false,
+    cancel: false,
+    bid: false,
+    withdraw: false,
+    complete: true,
+  };
+  const snapshot = await fixture(page, "seller", data);
+  snapshot.pending = 1;
+  snapshot.sales = [
+    {
+      auction_id: id,
+      request_id: completion,
+      generation: 1,
+      title: data.asset.name,
+      price: "1.25000000",
+      buyer,
+      remaining_ms: 420000,
+      timer_running: true,
+    },
+  ];
+  let request: unknown = null;
+  await page.route(`**/api/v1/auctions/${id}/complete`, async (route) => {
+    request = route.request().postDataJSON();
+    snapshot.pending = 0;
+    snapshot.sales = [];
+    await route.fulfill({
+      json: { payment_status: "unverified", transfer_id: "fixture" },
+    });
+  });
+  await page.goto("/messages");
+  await expect(
+    page.getByRole("heading", { name: "Approve the sale transfer" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("sale-message.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Complete sale" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(
+    "Payment has not been processed or verified.",
+  );
+  const approve = dialog.getByRole("button", { name: "Approve & transfer" });
+  await expect(approve).toBeDisabled();
+  await dialog.getByRole("checkbox").check();
+  await approve.click();
+  await expect(
+    page.getByRole("heading", { name: "You are all caught up" }),
+  ).toBeVisible();
+  expect(request).toEqual({ request_id: completion, generation: 1 });
+});
+
+test("a changed winner requires fresh transfer consent", async ({ page }) => {
+  await page.clock.install();
+  const data = auction();
+  Object.assign(data, {
+    status: "awaiting_completion",
+    winner: buyer,
+    agreed_price: "2.00000000",
+    generation: 1,
+    completion_request_id: completion,
+  });
+  data.actions.bid = false;
+  data.actions.complete = true;
+  await fixture(page, "seller", data);
+  let submitted: unknown = null;
+  await page.route(`**/api/v1/auctions/${id}/complete`, async (route) => {
+    submitted = route.request().postDataJSON();
+    data.status = "completed";
+    data.actions.complete = false;
+    await route.fulfill({ json: { payment_status: "unverified" } });
+  });
+
+  await page.goto(`/market/${id}`);
+  await page.getByRole("button", { name: "Complete sale" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("checkbox").check();
+  const approve = dialog.getByRole("button", { name: "Approve & transfer" });
+  await expect(approve).toBeEnabled();
+
+  const nextRequest = "00000000-0000-4000-8000-000000000031";
+  data.winner = { ...buyer, name: "Remaining buyer", username: "survivor" };
+  data.agreed_price = "1.25000000";
+  data.generation = 2;
+  data.completion_request_id = nextRequest;
+  await page.clock.runFor(5001);
+  await expect(dialog).toContainText("@survivor");
+  await expect(dialog).toContainText("1.25000000 ZEC");
+  await expect(dialog.getByRole("checkbox")).not.toBeChecked();
+  await expect(approve).toBeDisabled();
+  expect(submitted).toBeNull();
+
+  await dialog.getByRole("checkbox").check();
+  await approve.click();
+  await expect(dialog).toHaveCount(0);
+  expect(submitted).toEqual({ request_id: nextRequest, generation: 2 });
+});
+
+test("withdrawal explains no reentry and updates the authoritative outcome", async ({
+  page,
+}) => {
+  const data = auction();
+  data.status = "matching";
+  data.generation = 2;
+  data.checks_total = 1;
+  data.your_bid = "1.00000001";
+  data.actions.bid = false;
+  data.actions.withdraw = true;
+  data.participation = {
+    status: "active",
+    remaining_ms: 123456,
+    timer_running: false,
+    created_at_ms: Date.now(),
+  };
+  await fixture(page, "buyer", data);
+  await page.route(`**/api/v1/auctions/${id}/withdraw`, async (route) => {
+    data.status = "no_sale";
+    data.reason = "no_remaining_buyers";
+    data.actions.withdraw = false;
+    data.participation!.status = "withdrawn";
+    await route.fulfill({ json: { mode: "dev_custodial" } });
+  });
+  await page.goto(`/market/${id}`);
+  await page.getByRole("button", { name: "Withdraw bid", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("cannot bid again");
+  await dialog
+    .getByRole("button", { name: "Withdraw bid", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "No participating buyers remain. The asset stays with the seller.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review bid" })).toHaveCount(0);
+});

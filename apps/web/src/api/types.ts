@@ -14,6 +14,7 @@ export interface Asset {
   description: string;
   image: string | null;
   owner_id: string;
+  active_auction_id?: string | null;
   created_at: string;
 }
 
@@ -22,5 +23,6 @@ export interface Transfer {
   asset_id: string;
   sender_id: string;
   recipient_id: string;
+  auction_id?: string | null;
   created_at: string;
 }

@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { Transfer } from "../api/types";
 
 export function TransferHistory({
@@ -25,7 +26,23 @@ export function TransferHistory({
               )}
             </span>
             <div>
-              <strong>{received ? "Asset received" : "Asset sent"}</strong>
+              <strong>
+                {transfer.auction_id
+                  ? received
+                    ? "Asset purchased"
+                    : "Asset sold"
+                  : received
+                    ? "Asset received"
+                    : "Asset sent"}
+              </strong>
+              {transfer.auction_id && (
+                <Link
+                  className="text-link"
+                  to={`/market/${transfer.auction_id}`}
+                >
+                  View sale
+                </Link>
+              )}
               <p className="break-all">Asset {transfer.asset_id}</p>
               <span className="field-help break-all">
                 {received ? "From" : "To"} {counterparty}

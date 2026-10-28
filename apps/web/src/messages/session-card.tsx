@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { post, message } from "../api/client";
 import { Dialog } from "../components/dialog";
 import { ErrorNotice } from "../components/feedback";
@@ -49,8 +50,13 @@ export function SessionCard({
       <div>
         <h3>{item.title}</h3>
         <p>{status}</p>
+        {item.auction_id && (
+          <Link className="text-link" to={`/market/${item.auction_id}`}>
+            View auction
+          </Link>
+        )}
       </div>
-      {active && (
+      {active && item.can_withdraw !== false && (
         <button className="quiet-button" onClick={() => setConfirm(true)}>
           Withdraw bid
         </button>

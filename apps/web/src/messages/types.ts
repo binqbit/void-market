@@ -1,3 +1,5 @@
+import type { SaleRequest } from "../auctions/types";
+
 export type ApprovalStage =
   | "number_transfer"
   | "mask_contribution"
@@ -9,6 +11,8 @@ export interface ApprovalMessage {
   id: string;
   session_id: string;
   session_title: string;
+  auction_id?: string | null;
+  can_withdraw?: boolean;
   request_id: string;
   revision: number;
   stage: ApprovalStage;
@@ -26,9 +30,12 @@ export interface MessageSnapshot {
   server_time_ms: number;
   pending: number;
   messages: ApprovalMessage[];
+  sales?: SaleRequest[];
   sessions: {
     id: string;
     title: string;
+    auction_id?: string | null;
+    can_withdraw?: boolean;
     status: string;
     participation_status: string;
     remaining_ms: number;

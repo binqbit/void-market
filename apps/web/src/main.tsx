@@ -12,6 +12,7 @@ import { PortfolioPage } from "./pages/portfolio";
 import "./styles.css";
 import { MessagesProvider } from "./messages/provider";
 import { MessagesPage } from "./pages/messages";
+import { AuctionPage } from "./pages/auction";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="market" element={<MarketPage />} />
+              <Route path="market/:id" element={<AuctionPage />} />
               <Route path="portfolio" element={<PortfolioPage />} />
               <Route path="messages" element={<MessagesPage />} />
               <Route path="docs" element={<DocsPage />} />

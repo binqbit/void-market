@@ -13,6 +13,8 @@ import { AddAssetDialog } from "../portfolio/add-asset-dialog";
 import { readPending } from "../portfolio/pending-transfer";
 import type { PendingTransfer } from "../portfolio/pending-transfer";
 import { TransferDialog } from "../portfolio/transfer-dialog";
+import { CreateAuctionDialog } from "../auctions/create-dialog";
+import { MyAuctions } from "../auctions/my-auctions";
 
 export function PortfolioPage() {
   const { profile, loading, error, refresh } = useSession();
@@ -50,11 +52,12 @@ export function PortfolioPage() {
 }
 
 function Portfolio({ accountId, name }: { accountId: string; name: string }) {
-  const [tab, setTab] = useState<"assets" | "history">("assets");
+  const [tab, setTab] = useState<"assets" | "auctions" | "history">("assets");
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
   const [adding, setAdding] = useState(false);
   const [selected, setSelected] = useState<Asset | null>(null);
+  const [selling, setSelling] = useState<Asset | null>(null);
   const [pending, setPending] = useState<PendingTransfer | null>(() =>
     readPending(accountId),
   );
@@ -153,6 +156,18 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
             <Clock3 size={17} />
             History
           </button>
+          <button
+            role="tab"
+            id="auctions-tab"
+            aria-selected={tab === "auctions"}
+            aria-controls="portfolio-panel"
+            onClick={() => {
+              setTab("auctions");
+              setPage(0);
+            }}
+          >
+            My auctions
+          </button>
         </div>
         <span className="field-help">
           {tab === "assets"
@@ -165,7 +180,9 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
         role="tabpanel"
         aria-labelledby={`${tab}-tab`}
       >
-        {active.loading ? (
+        {tab === "auctions" ? (
+          <MyAuctions />
+        ) : active.loading ? (
           <Loading>
             {tab === "assets" ? "Loading assets…" : "Loading history…"}
           </Loading>
@@ -205,6 +222,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
                 asset={asset}
                 disabled={Boolean(pending)}
                 onTransfer={() => setSelected(asset)}
+                onSell={() => setSelling(asset)}
               />
             ))}
           </div>
@@ -214,7 +232,8 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
             accountId={accountId}
           />
         )}
-        {!active.loading &&
+        {tab !== "auctions" &&
+          !active.loading &&
           !active.error &&
           (page > 0 || active.data?.length === 20) && (
             <div className="pagination">
@@ -252,6 +271,9 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           onComplete={updated}
           onPending={() => setPending(readPending(accountId))}
         />
+      )}
+      {selling && (
+        <CreateAuctionDialog asset={selling} onClose={() => setSelling(null)} />
       )}
     </div>
   );

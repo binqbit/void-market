@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { Asset } from "../api/types";
 import { AssetImage } from "../components/asset-image";
 
@@ -6,10 +7,12 @@ export function AssetCard({
   asset,
   disabled,
   onTransfer,
+  onSell,
 }: {
   asset: Asset;
   disabled: boolean;
   onTransfer: () => void;
+  onSell: () => void;
 }) {
   return (
     <article className="asset-card">
@@ -21,9 +24,25 @@ export function AssetCard({
         <code className="asset-id" title={asset.id}>
           {asset.id}
         </code>
+        {asset.active_auction_id ? (
+          <Link
+            className="button full-width"
+            to={`/market/${asset.active_auction_id}`}
+          >
+            View auction <ArrowUpRight size={17} />
+          </Link>
+        ) : (
+          <button
+            className="button primary full-width"
+            disabled={disabled}
+            onClick={onSell}
+          >
+            Sell asset
+          </button>
+        )}
         <button
           className="button full-width"
-          disabled={disabled}
+          disabled={disabled || Boolean(asset.active_auction_id)}
           onClick={onTransfer}
         >
           Transfer <ArrowUpRight size={17} />
