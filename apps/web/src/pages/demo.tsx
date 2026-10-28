@@ -109,7 +109,7 @@ export function DemoPage() {
                   {busy === "zec" ? "Requesting…" : "Claim 10 ZEC"}
                 </button>
                 <button
-                  className="button primary"
+                  className="button demo-action"
                   disabled={
                     busy !== null || pending || !query.data.own.wallet_ready
                   }

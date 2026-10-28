@@ -17,27 +17,27 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   color-scheme: light;
-  --bg: #f7f7f8;
+  --bg: #f2f3f1;
   --panel: #ffffff;
-  --panel-alt: #eeeef0;
-  --text: #1a1b20;
-  --muted: #62646d;
-  --placeholder: #6d707a;
-  --line: #dddfe4;
-  --accent: #3c7000;
+  --panel-alt: #eaede9;
+  --text: #1b211d;
+  --muted: #59635d;
+  --placeholder: #6d7770;
+  --line: #d4dbd5;
+  --accent: #386633;
   --accent-fill: #b3ff7a;
   --accent-ink: #17300d;
-  --button-primary-bg: #e6efde;
-  --button-primary-border: #a2bd8c;
-  --button-primary-text: #304921;
-  --button-primary-hover: #dbe9cf;
+  --button-primary-bg: #e5eddf;
+  --button-primary-border: #9fb99a;
+  --button-primary-text: #274823;
+  --button-primary-hover: #d8e6d3;
   --glow: #b3ff7a14;
   --aura: #94e95a26;
   --aura-soft: #94e95a12;
   --aura-strong: #94e95a3d;
   --text-glow: none;
   --danger: #a13432;
-  --shadow: 0 14px 60px #14161c0a;
+  --shadow: 0 14px 60px #1c2b200c;
 }
 
 :root[data-theme="dark"] {

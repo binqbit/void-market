@@ -1,10 +1,28 @@
+:root {
+  --demo-accent: #805d16;
+  --demo-border: #c4a96c;
+  --demo-background: #fbf6ea;
+  --demo-notice-border: #e4d5b5;
+  --demo-notice-background: #faf6ec;
+  --demo-selected-border: #c4a96c;
+  --demo-glow: #dabb6930;
+}
+:root[data-theme="dark"] {
+  --demo-accent: #dabb69;
+  --demo-border: #dabb6940;
+  --demo-background: #dabb6910;
+  --demo-notice-border: #dabb6933;
+  --demo-notice-background: #dabb6908;
+  --demo-selected-border: #dabb6970;
+  --demo-glow: #dabb6959;
+}
 .demo-badge {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #dabb69;
-  border: 1px solid #dabb6940;
-  background: #dabb6910;
+  color: var(--demo-accent);
+  border: 1px solid var(--demo-border);
+  background: var(--demo-background);
   padding: 5px 9px;
   border-radius: 6px;
   font-size: 11px;
@@ -16,14 +34,23 @@
   background: #0b0d11;
 }
 .main-nav a.demo-nav {
-  color: #dabb69;
+  color: var(--demo-accent);
   text-shadow:
-    0 0 10px #dabb6959,
+    0 0 10px var(--demo-glow),
     0 0 22px #dabb692e;
 }
 .main-nav a.demo-nav.active .nav-label::after {
-  background: #dabb69;
+  background: var(--demo-accent);
   box-shadow: 0 0 10px #dabb6966;
+}
+.button.demo-action {
+  color: var(--demo-accent);
+  border-color: var(--demo-border);
+  background: var(--demo-background);
+}
+.button.demo-action:hover {
+  border-color: var(--demo-accent);
+  box-shadow: 0 0 18px var(--demo-glow);
 }
 .demo-close-bidding {
   color: #705300;
@@ -39,13 +66,13 @@
   gap: 15px;
   color: var(--muted);
   padding: 18px 22px;
-  border: 1px solid #dabb6933;
+  border: 1px solid var(--demo-notice-border);
   border-radius: 12px;
   margin-bottom: 28px;
-  background: #dabb6908;
+  background: var(--demo-notice-background);
 }
 .demo-notice svg {
-  color: #dabb69;
+  color: var(--demo-accent);
   flex-shrink: 0;
 }
 .demo-notice p {
@@ -62,8 +89,8 @@
   gap: 12px;
 }
 .demo-identity-buttons .selected {
-  border-color: #dabb6970;
-  color: #dabb69;
+  border-color: var(--demo-selected-border);
+  color: var(--demo-accent);
   opacity: 1;
 }
 .demo-resources {
@@ -103,7 +130,7 @@
   padding-left: 8px;
 }
 .demo-steps li::marker {
-  color: #dabb69;
+  color: var(--demo-accent);
   font-family: ui-monospace, monospace;
 }
 .demo-steps p {

@@ -124,7 +124,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
             >
               <Plus size={18} /> Deposit NFT
             </button>
-            <Link className="button" to="/demo">
+            <Link className="button demo-action" to="/demo">
               Get a local NFT
             </Link>
           </div>
