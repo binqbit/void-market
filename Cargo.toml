@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/tfhe-math", "crates/private-check", "apps/market"]
+members = [
+    "crates/tfhe-math",
+    "crates/private-check",
+    "crates/arbiter-protocol",
+    "apps/market",
+]
 
 [workspace.package]
 version = "0.1.0"
