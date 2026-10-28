@@ -47,7 +47,7 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
                     let result: serde_json::Value = store.record(&output).unwrap();
                     assert_eq!(result["value"], expected);
                     assert_eq!(result["proof_status"], "unavailable");
-                    assert_eq!(steps, 5);
+                    assert_eq!(steps, 4);
                     break;
                 }
             }
@@ -68,13 +68,13 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
         panic!("An auction must request early masks before requesting decryption");
     };
     let request: Request = store.record(&reference).unwrap();
-    assert!(matches!(request, Request::Masks { .. }));
+    assert!(matches!(request, Request::Preparation { .. }));
     let mut participants = support::Participants::new(&keys, store.clone());
     assert!(
         guarded_engine
             .advance(participants.respond(request))
             .is_err(),
-        "The node must reject a premature transition to number decryption"
+        "The node must reject completing preparation before the release gate"
     );
 
     #[cfg(feature = "demo-mode")]
@@ -107,7 +107,7 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
                 Progress::Complete(output) => {
                     let result: serde_json::Value = store.record(&output).unwrap();
                     assert_eq!(result["value"], true);
-                    assert_eq!(steps, 5, "Early closure must reuse the collected masks");
+                    assert_eq!(steps, 4, "Early closure must reuse the collected masks");
                     break;
                 }
             }

@@ -321,7 +321,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
     })
     .await
     .expect("real HE node did not finish");
-    assert_eq!(responded.len(), 5);
+    assert_eq!(responded.len(), 4);
     let leaked: i64 = sqlx::query_scalar("SELECT count(*) FROM outbox WHERE stream='nodes' AND (data::text LIKE '%blinding%' OR data::text LIKE '%ciphertext%' OR data::text LIKE '%value%')").fetch_one(&pool).await.unwrap();
     assert_eq!(leaked, 0);
     stop.send(true).unwrap();

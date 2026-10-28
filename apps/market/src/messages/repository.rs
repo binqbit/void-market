@@ -149,7 +149,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
          ON p.auction_id=x.id AND p.account_id=a.account_id
          LEFT JOIN auction_checks c ON c.session_id=s.id
-         WHERE a.account_id=$1 ORDER BY CASE WHEN a.status='ready' THEN 0 ELSE 1 END,
+         WHERE a.account_id=$1 AND a.status<>'blocked'
+         ORDER BY CASE WHEN a.status='ready' THEN 0 ELSE 1 END,
          a.created_at DESC, a.id LIMIT 100",
     )
     .bind(account)
@@ -222,7 +223,7 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms-3600000<=$2) AND COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running,
-         CASE WHEN x.status='open' AND s.response_ref IS NOT NULL THEN x.closes_at_ms-3600000 END AS waiting_until_ms FROM
+         CASE WHEN x.status='open' THEN x.closes_at_ms-3600000 END AS waiting_until_ms FROM
          approval_sessions s JOIN approval_members m ON m.session_id=s.id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
          LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p

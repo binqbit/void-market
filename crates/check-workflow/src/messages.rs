@@ -148,8 +148,28 @@ pub struct Opening {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NumberChallenge {
+    pub challenge: ArtifactRef,
+    pub reference: [u8; 32],
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NumberResponse {
+    pub challenge: [u8; 32],
+    pub ciphertext: ArtifactRef,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
+    /// Independent preparation actions. The gateway gates number decryption on auction freeze.
+    Preparation {
+        context: ContextRecord,
+        base: [u8; 32],
+        number: NumberChallenge,
+    },
     Number {
         context: ContextRecord,
         challenge: ArtifactRef,
@@ -179,6 +199,12 @@ pub enum Request {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Response {
+    Preparation {
+        context: [u8; 32],
+        base: [u8; 32],
+        contributions: [Contribution; 2],
+        number: NumberResponse,
+    },
     Number {
         context: [u8; 32],
         challenge: [u8; 32],

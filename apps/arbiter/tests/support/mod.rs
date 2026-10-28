@@ -4,6 +4,7 @@ use arbiter::{
         Assurance, CheckManifest, Contribution, KeyMaterial, Opening, Predicate, Request, Response,
     },
 };
+use check_workflow::messages::NumberResponse;
 use private_check::{
     BooleanChallengeBinding, KeyOwnerContext, NumberInput, OwnerId, PendingBooleanAnswer,
     PreparedOwnerMask, TransferBinding, TransferChallenge,
@@ -63,6 +64,44 @@ impl<'a> Participants<'a> {
                     context: expected.id(),
                     challenge: reference,
                     ciphertext: self.store.write(response.encoded().as_bytes()).unwrap(),
+                }
+            }
+            Request::Preparation {
+                context,
+                base,
+                number,
+            } => {
+                let masks = self.respond(Request::Masks {
+                    context: context.clone(),
+                    base,
+                });
+                let transfer = self.respond(Request::Number {
+                    context,
+                    challenge: number.challenge,
+                    reference: number.reference,
+                });
+                match (masks, transfer) {
+                    (
+                        Response::Masks {
+                            context,
+                            base,
+                            contributions,
+                        },
+                        Response::Number {
+                            challenge,
+                            ciphertext,
+                            ..
+                        },
+                    ) => Response::Preparation {
+                        context,
+                        base,
+                        contributions,
+                        number: NumberResponse {
+                            challenge,
+                            ciphertext,
+                        },
+                    },
+                    _ => panic!("Expected independent preparation responses"),
                 }
             }
             Request::Masks { context, base } => {

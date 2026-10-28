@@ -88,7 +88,7 @@ pub fn execute(custody: &Custody, work: Work) -> Result<Output> {
                     .map_err(|_| ApiError::Unavailable)?
             })
         }
-        Request::Masks { base, .. } => {
+        Request::Preparation { base, .. } | Request::Masks { base, .. } => {
             let target = target_public(custody, &work.context)?;
             let mask = PreparedOwnerMask::generate(
                 OwnerId::new(*work.account.as_bytes()).map_err(|_| ApiError::Forbidden)?,

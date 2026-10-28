@@ -90,7 +90,7 @@ test("messages show one clear approval and preserve the layout", async ({
   await expect(
     page.getByRole("heading", { name: "Messages", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("Step 2 of 5")).toBeVisible();
+  await expect(page.getByText("Preparation", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Your sessions" }),
   ).toHaveCount(0);
@@ -249,7 +249,7 @@ test("early approvals keep the timer paused until bidding closes", async ({
     timer_running: false,
   });
   await page.goto("/messages");
-  await expect(page.getByText("Step 1 of 5")).toBeVisible();
+  await expect(page.getByText("Preparation", { exact: true })).toBeVisible();
   await expect(page.getByText("10:00")).toBeVisible();
   await expect(page.getByText("Shared auction budget")).toBeVisible();
   await expect(

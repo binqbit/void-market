@@ -5,7 +5,7 @@ use crate::{
     state::AppState,
 };
 use arbiter_protocol::{ArtifactRef, Completion, JobInput, JobStatus};
-use check_workflow::messages::{ContextRecord, Contribution, Opening, Request, Response};
+use check_workflow::messages::{ContextRecord, Request};
 use serde_json::{Value, json};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -148,7 +148,9 @@ async fn publish(
             "The request differs from the admitted comparison",
         ));
     }
-    if !matches!(request, Request::Masks { .. }) && !release_allowed(connection, session).await? {
+    if !matches!(request, Request::Masks { .. } | Request::Preparation { .. })
+        && !release_allowed(connection, session).await?
+    {
         return Err(ApiError::Conflict("Auction inputs have not been frozen"));
     }
 
@@ -186,6 +188,39 @@ async fn publish(
         .execute(&mut *connection)
         .await?;
     }
+    if let Request::Preparation {
+        context, number, ..
+    } = &request
+    {
+        let transfer = custody
+            .artifacts
+            .write_json(&Request::Number {
+                context: context.clone(),
+                challenge: number.challenge.clone(),
+                reference: number.reference,
+            })
+            .map_err(|_| ApiError::Unavailable)?;
+        let status = if release_allowed(connection, session).await? {
+            "ready"
+        } else {
+            "blocked"
+        };
+        sqlx::query(
+            "INSERT INTO approval_messages(id, session_id, account_id, request_id,
+             request_ref, generation, kind, status) VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(Uuid::new_v4())
+        .bind(session)
+        .bind(members[0])
+        .bind(reference.id)
+        .bind(json!(transfer))
+        .bind(generation)
+        .bind(ActionKind::NumberTransfer.as_str())
+        .bind(status)
+        .execute(&mut *connection)
+        .await?;
+    }
     clock::meter(connection, session, clock::now_ms()?).await?;
     Ok(())
 }
@@ -197,7 +232,8 @@ fn describe(
     members: &[Uuid],
 ) -> Result<(ContextRecord, Vec<(Uuid, ActionKind)>)> {
     let context = match request {
-        Request::Number { context, .. }
+        Request::Preparation { context, .. }
+        | Request::Number { context, .. }
         | Request::Masks { context, .. }
         | Request::AnswerCommitment { context, .. } => context.clone(),
         _ => saved
@@ -222,6 +258,10 @@ fn describe(
             .collect()
     };
     let actions = match (request, previous) {
+        (Request::Preparation { .. }, None) => both(ActionKind::MaskContribution),
+        (Request::AnswerCommitment { .. }, Some(Request::Preparation { .. })) => {
+            vec![(members[1], ActionKind::AnswerCommitment)]
+        }
         (Request::Number { .. }, None) => vec![(members[0], ActionKind::NumberTransfer)],
         (Request::Masks { context, .. }, None) if context.manifest.release_at_ms.is_some() => {
             both(ActionKind::MaskContribution)
@@ -304,8 +344,8 @@ pub async fn route_response(
     if pending != 0 {
         return Ok(());
     }
-    let references: Vec<Value> = sqlx::query_scalar(
-        "SELECT a.response_ref FROM approval_messages a JOIN approval_members m ON
+    let references: Vec<(String, Value)> = sqlx::query_as(
+        "SELECT a.kind, a.response_ref FROM approval_messages a JOIN approval_members m ON
          m.session_id=a.session_id AND m.account_id=a.account_id WHERE a.session_id=$1
          AND a.request_id=$2 ORDER BY m.position",
     )
@@ -319,45 +359,17 @@ pub async fn route_response(
         .record(&request_ref)
         .map_err(|_| ApiError::Unavailable)?;
     let context: ContextRecord = serde_json::from_value(context).map_err(|_| ApiError::Internal)?;
-    let mut pieces = Vec::<Value>::new();
-    for reference in references {
+    let mut pieces = Vec::<(String, Value)>::new();
+    for (kind, reference) in references {
         let reference: ArtifactRef =
             serde_json::from_value(reference).map_err(|_| ApiError::Internal)?;
-        pieces.push(
-            custody
-                .artifacts
-                .record(&reference)
-                .map_err(|_| ApiError::Unavailable)?,
-        );
+        let value = custody
+            .artifacts
+            .record(&reference)
+            .map_err(|_| ApiError::Unavailable)?;
+        pieces.push((kind, value));
     }
-    let response = match request {
-        Request::Masks { base, .. } => {
-            let contributions: Vec<Contribution> = pieces
-                .into_iter()
-                .map(serde_json::from_value)
-                .collect::<std::result::Result<_, _>>()
-                .map_err(|_| ApiError::Internal)?;
-            Response::Masks {
-                context: context.restore().map_err(|_| ApiError::Internal)?.id(),
-                base,
-                contributions: contributions.try_into().map_err(|_| ApiError::Internal)?,
-            }
-        }
-        Request::Openings { context, base } => {
-            let openings: Vec<Opening> = pieces
-                .into_iter()
-                .map(serde_json::from_value)
-                .collect::<std::result::Result<_, _>>()
-                .map_err(|_| ApiError::Internal)?;
-            Response::Openings {
-                context,
-                base,
-                openings: openings.try_into().map_err(|_| ApiError::Internal)?,
-            }
-        }
-        _ => serde_json::from_value(pieces.into_iter().next().ok_or(ApiError::Internal)?)
-            .map_err(|_| ApiError::Internal)?,
-    };
+    let response = super::responses::assemble(request, &context, pieces)?;
     let response = custody
         .artifacts
         .write_json(&response)
@@ -404,6 +416,29 @@ pub(crate) async fn release_auction_responses(
     connection: &mut PgConnection,
     auction: Uuid,
 ) -> Result<()> {
+    let blocked: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT s.id FROM approval_sessions s JOIN approval_messages m ON m.session_id=s.id
+         WHERE s.auction_id=$1 AND s.status='active' AND m.status='blocked'
+         AND m.kind='number_transfer' AND m.generation=s.generation
+         AND m.request_id=(s.current_request->>'id')::uuid ORDER BY s.id",
+    )
+    .bind(auction)
+    .fetch_all(&mut *connection)
+    .await?;
+    for session in blocked {
+        lock_session(connection, session).await?;
+        if release_allowed(connection, session).await? {
+            sqlx::query(
+                "UPDATE approval_messages SET status='ready', created_at=now(),
+                 revision=nextval('message_revision')
+                 WHERE session_id=$1 AND status='blocked' AND kind='number_transfer'",
+            )
+            .bind(session)
+            .execute(&mut *connection)
+            .await?;
+            clock::meter(connection, session, clock::now_ms()?).await?;
+        }
+    }
     let sessions: Vec<(Uuid, Uuid, Value, Value)> = sqlx::query_as(
         "SELECT s.id,s.job_id,s.current_request,s.response_ref
          FROM approval_sessions s JOIN auction_checks c ON c.session_id=s.id

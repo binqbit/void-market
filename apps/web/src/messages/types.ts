@@ -53,36 +53,36 @@ export interface MessageSnapshot {
 
 export const stages: Record<
   ApprovalStage,
-  { title: string; description: string; step: number }
+  { title: string; description: string; phase: string }
 > = {
   number_transfer: {
     title: "Transfer your protected value",
     description:
       "Allow the arbiter to continue the private comparison using your masked value.",
-    step: 1,
+    phase: "Preparation",
   },
   mask_contribution: {
     title: "Contribute your privacy mask",
     description:
       "Create your independent mask for this comparison. Your original value is not included in the message.",
-    step: 2,
+    phase: "Preparation",
   },
   answer_commitment: {
     title: "Commit to the protected answer",
     description:
       "Record a commitment to this exact answer before it can be opened.",
-    step: 3,
+    phase: "Answer commitment",
   },
   answer_reveal: {
     title: "Send the protected answer",
     description:
       "Release the masked answer that matches your previous commitment.",
-    step: 4,
+    phase: "Protected answer",
   },
   mask_opening: {
     title: "Open your comparison mask",
     description:
       "Release your mask for this comparison so the arbiter can finish checking the result.",
-    step: 5,
+    phase: "Result opening",
   },
 };

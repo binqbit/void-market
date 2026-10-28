@@ -104,9 +104,7 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
       <div className="message-content">
         <div className="message-topline">
           <span className="eyebrow">{item.session_title}</span>
-          <span className="message-stage">
-            Step {item.step ?? stage.step} of 5
-          </span>
+          <span className="message-stage">{stage.phase}</span>
         </div>
         <div className="message-title">
           <span className="message-symbol" aria-hidden="true">

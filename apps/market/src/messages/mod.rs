@@ -2,6 +2,7 @@ mod clock;
 pub mod model;
 mod protocol;
 mod repository;
+mod responses;
 mod routes;
 mod signing;
 mod worker;
