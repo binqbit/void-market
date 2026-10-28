@@ -84,9 +84,25 @@
   margin-bottom: 28px;
 }
 .demo-identity-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+.demo-identity-buttons .button {
+  min-width: 0;
+  padding-inline: 8px;
+  font-size: 13px;
+}
+.demo-login {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.demo-login-intro p {
+  margin: 8px 0 0;
+}
+.demo-login + .fine-print {
+  margin: 0;
 }
 .demo-identity-buttons .selected {
   border-color: var(--demo-selected-border);
@@ -219,12 +235,14 @@
   .demo-transactions {
     grid-template-columns: 1fr;
   }
-  .demo-identity-buttons .button {
-    flex: 1 1 140px;
-  }
   .native-transaction {
     grid-template-columns: minmax(0, 1fr);
     padding: 18px;
+  }
+}
+@media (max-width: 520px) {
+  .demo-sign-in-prefix {
+    display: none;
   }
 }
 .demo-transactions .native-transaction {

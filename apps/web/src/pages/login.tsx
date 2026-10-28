@@ -85,8 +85,10 @@ export function LoginPage() {
         </div>
         {demo && (
           <section className="demo-login">
-            <span className="demo-badge">LOCALNET DEMO</span>
-            <p>Try the full flow with three disposable accounts.</p>
+            <div className="demo-login-intro">
+              <span className="demo-badge">LOCALNET DEMO</span>
+              <p>Try the full flow with three disposable accounts.</p>
+            </div>
             <DemoSwitcher />
           </section>
         )}

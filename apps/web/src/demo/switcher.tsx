@@ -27,13 +27,24 @@ export function DemoSwitcher({ current }: { current?: string }) {
         {["alice", "bob", "daniel"].map((actor) => (
           <button
             key={actor}
-            className={`button ${current === actor ? "selected" : ""}`}
+            className={`button demo-action ${current === actor ? "selected" : ""}`}
+            aria-label={
+              busy === actor
+                ? "Signing in…"
+                : `Continue as ${actor[0].toUpperCase()}${actor.slice(1)}`
+            }
             disabled={busy !== null || current === actor}
             onClick={() => void signIn(actor)}
           >
-            {busy === actor
-              ? "Signing in…"
-              : `Continue as ${actor[0].toUpperCase()}${actor.slice(1)}`}
+            {busy === actor ? (
+              "Signing in…"
+            ) : (
+              <span>
+                <span className="demo-sign-in-prefix">Continue as </span>
+                {actor[0].toUpperCase()}
+                {actor.slice(1)}
+              </span>
+            )}
           </button>
         ))}
       </div>
