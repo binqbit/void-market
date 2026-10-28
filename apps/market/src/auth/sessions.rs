@@ -41,8 +41,15 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
     let claims = tokens::verify(&token, &state.config.jwt_secret)?;
     let account: Option<Uuid> = sqlx::query_scalar(
         "SELECT s.account_id
-         FROM sessions s JOIN accounts a ON a.id=s.account_id
-         WHERE s.token_hash = $1 AND s.expires_at > now() AND (NOT a.is_demo OR $2)",
+         FROM sessions s
+         JOIN accounts a ON a.id = s.account_id
+         WHERE
+             s.token_hash = $1
+             AND s.expires_at > now()
+             AND (
+                 NOT a.is_demo
+                 OR $2
+             )",
     )
     .bind(token_hash(&token)?)
     .bind(state.chains.is_some())
@@ -64,7 +71,7 @@ pub async fn issue(
     let token = tokens::issue(account, secret)?;
 
     sqlx::query(
-        "INSERT INTO sessions(token_hash, account_id, expires_at)
+        "INSERT INTO sessions (token_hash, account_id, expires_at)
          VALUES ($1, $2, now() + interval '7 days')",
     )
     .bind(token_hash(&token)?)
@@ -76,14 +83,10 @@ pub async fn issue(
 
 pub async fn revoke(state: &AppState, headers: &HeaderMap) -> Result<HeaderValue> {
     if let Some(token) = token(headers) {
-        sqlx::query(
-            "DELETE
-         FROM sessions
-         WHERE token_hash = $1",
-        )
-        .bind(token_hash(&token)?)
-        .execute(&state.pool)
-        .await?;
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
+            .bind(token_hash(&token)?)
+            .execute(&state.pool)
+            .await?;
     }
     cookie("", 0, state.config.secure_cookie)
 }

@@ -19,20 +19,17 @@ struct Event {
 }
 
 pub async fn record(connection: &mut PgConnection, kind: &str, data: Value) -> Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox(id, kind, data)
-         VALUES ($1,$2,$3)",
-    )
-    .bind(Uuid::new_v4())
-    .bind(kind)
-    .bind(data)
-    .execute(connection)
-    .await?;
+    sqlx::query("INSERT INTO outbox(id, kind, data) VALUES ($1, $2, $3)")
+        .bind(Uuid::new_v4())
+        .bind(kind)
+        .bind(data)
+        .execute(connection)
+        .await?;
     Ok(())
 }
 
 pub async fn record_node(connection: &mut PgConnection, kind: &str, data: Value) -> Result<()> {
-    sqlx::query("INSERT INTO outbox(id,kind,data,stream) VALUES($1,$2,$3,'nodes')")
+    sqlx::query("INSERT INTO outbox(id, kind, data, stream) VALUES($1, $2, $3, 'nodes')")
         .bind(Uuid::new_v4())
         .bind(kind)
         .bind(data)
@@ -58,15 +55,31 @@ pub async fn deliver_batch(
     let claim = Uuid::new_v4();
     let events: Vec<Event> = sqlx::query_as(
         "UPDATE outbox
-             SET claim_id=$1, claim_until=now()+interval '120 seconds'
-             WHERE id IN (
-                 SELECT id FROM outbox
-                 WHERE published_at IS NULL
-                   AND (claim_until IS NULL OR claim_until<now())
-                 ORDER BY created_at, id
-                 LIMIT 20 FOR UPDATE SKIP LOCKED
+         SET
+             claim_id = $1,
+             claim_until = now() + interval '120 seconds'
+         WHERE
+             id IN
+             (
+                 SELECT id
+                 FROM outbox
+                 WHERE
+                     published_at IS NULL
+                     AND (
+                         claim_until IS NULL
+                         OR claim_until < now()
+                     )
+                 ORDER BY
+                     created_at,
+                     id
+                 LIMIT 20
+                 FOR UPDATE SKIP LOCKED
              )
-             RETURNING id, kind, data, stream",
+         RETURNING
+             id,
+             kind,
+             data,
+             stream",
     )
     .bind(claim)
     .fetch_all(&state.pool)
@@ -95,16 +108,27 @@ pub async fn deliver_batch(
             )
             .await;
         if let Err((error, _)) = delivered {
-            let _ =
-                sqlx::query("UPDATE outbox SET claim_id=NULL,claim_until=NULL WHERE claim_id=$1")
-                    .bind(claim)
-                    .execute(&state.pool)
-                    .await;
+            let _ = sqlx::query(
+                "UPDATE outbox
+                 SET
+                     claim_id = NULL,
+                     claim_until = NULL
+                 WHERE claim_id = $1",
+            )
+            .bind(claim)
+            .execute(&state.pool)
+            .await;
             return Err(error.into());
         }
         sqlx::query(
-            "UPDATE outbox SET published_at=now(), claim_id=NULL, claim_until=NULL
-             WHERE id=$1 AND claim_id=$2",
+            "UPDATE outbox
+             SET
+                 published_at = now(),
+                 claim_id = NULL,
+                 claim_until = NULL
+             WHERE
+                 id = $1
+                 AND claim_id = $2",
         )
         .bind(event.id)
         .bind(claim)
@@ -160,7 +184,16 @@ pub async fn run(
             _ = interval.tick() => {
                 let result = deliver_batch(&state, &producer).await;
                 let native_ready = if native_enabled {
-                    sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM localnet_runtime WHERE singleton AND healthy AND $1-last_tick_ms BETWEEN 0 AND 5000)")
+                    sqlx::query_scalar::<_,bool>(
+                        "SELECT EXISTS(
+                             SELECT 1
+                             FROM localnet_runtime
+                             WHERE
+                                 singleton
+                                 AND healthy
+                                 AND $1 - last_tick_ms BETWEEN 0 AND 5000
+                         )",
+                    )
                         .bind(crate::messages::now_ms().unwrap_or(0)).fetch_one(&state.pool).await.unwrap_or(false)
                 } else {true};
                 let ready = native_ready && result.is_ok() && state.node_ready.load(Ordering::Relaxed)
@@ -224,7 +257,9 @@ async fn broker_ready(producer: &FutureProducer, topic: String) -> bool {
 
 async fn remove_expired_sessions(pool: &sqlx::PgPool) {
     let _ = sqlx::query(
-        "DELETE FROM arbiter_requests WHERE created_at < now() - interval '10 minutes'",
+        "DELETE
+         FROM arbiter_requests
+         WHERE created_at < now() - interval '10 minutes'",
     )
     .execute(pool)
     .await;

@@ -41,11 +41,15 @@ pub async fn authorize(
         .ok_or(ApiError::Unauthorized)?;
     let token_hash: Vec<u8> = Sha256::digest(token.as_bytes()).to_vec();
     let row: Option<(Uuid, String, Option<Uuid>)> = sqlx::query_as(
-        "SELECT deployment_id, public_key, instance_id
+        "SELECT
+             deployment_id,
+             public_key,
+             instance_id
          FROM arbiter_nodes
-         WHERE id=$1
-         AND token_hash=$2
-         AND enabled",
+         WHERE
+             id = $1
+             AND token_hash = $2
+             AND enabled",
     )
     .bind(signed.node_id)
     .bind(token_hash)

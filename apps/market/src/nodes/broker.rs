@@ -39,16 +39,18 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
     }
     let digest = Sha256::digest(bytes).to_vec();
     let mut tx = state.pool.begin().await?;
-    let inserted =
-        sqlx::query("INSERT INTO node_event_inbox(id,digest) VALUES($1,$2) ON CONFLICT DO NOTHING")
-            .bind(event.id)
-            .bind(&digest)
-            .execute(&mut *tx)
-            .await?
-            .rows_affected();
+    let inserted = sqlx::query(
+        "INSERT INTO node_event_inbox (id, digest)
+         VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(event.id)
+    .bind(&digest)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
     if inserted == 0 {
         let original: Vec<u8> =
-            sqlx::query_scalar("SELECT digest FROM node_event_inbox WHERE id=$1")
+            sqlx::query_scalar("SELECT digest FROM node_event_inbox WHERE id = $1")
                 .bind(event.id)
                 .fetch_one(&mut *tx)
                 .await?;
@@ -61,10 +63,16 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
     match event.kind.as_str() {
         "node.job_submitted" => {
             let id = event_id(&event.data, "job_id")?;
-            sqlx::query("UPDATE arbiter_jobs SET status='queued' WHERE id=$1 AND status='pending'")
-                .bind(id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "UPDATE arbiter_jobs
+                 SET status = 'queued'
+                 WHERE
+                     id = $1
+                     AND status = 'pending'",
+            )
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
         }
         "node.result_submitted" => {
             let id = event_id(&event.data, "result_id")?;
@@ -77,10 +85,13 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
             let response = event_id(&event.data, "response_id")?;
             sqlx::query(
                 "UPDATE arbiter_jobs
-                 SET response=pending_response, pending_response=NULL
-                 WHERE id=$1
-                 AND status='waiting'
-                 AND pending_response->>'id'=$2",
+                 SET
+                     response = pending_response,
+                     pending_response = NULL
+                 WHERE
+                     id = $1
+                     AND status = 'waiting'
+                     AND pending_response ->> 'id' = $2",
             )
             .bind(id)
             .bind(response.to_string())
@@ -90,8 +101,13 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
         "message.approved" => {
             let id = event_id(&event.data, "message_id")?;
             sqlx::query(
-                "UPDATE approval_messages SET status='queued',
-                 revision=nextval('message_revision') WHERE id=$1 AND status='approved'",
+                "UPDATE approval_messages
+                 SET
+                     status = 'queued',
+                     revision = nextval('message_revision')
+                 WHERE
+                     id = $1
+                     AND status = 'approved'",
             )
             .bind(id)
             .execute(&mut *tx)

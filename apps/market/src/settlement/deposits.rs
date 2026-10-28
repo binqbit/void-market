@@ -70,7 +70,7 @@ pub async fn receive(state: &AppState, account: Uuid, mut input: DepositNft) -> 
         "{}:{}:{}",
         deployment.ethereum_genesis, input.collection, input.token_id
     );
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,738291))")
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 738291))")
         .bind(identity)
         .execute(&mut *tx)
         .await?;
@@ -118,10 +118,11 @@ async fn replay(
     account: Uuid,
     input: &DepositNft,
 ) -> Result<Option<Uuid>> {
-    let existing: Option<Operation> = sqlx::query_as("SELECT * FROM chain_operations WHERE id=$1")
-        .bind(input.request_id)
-        .fetch_optional(connection)
-        .await?;
+    let existing: Option<Operation> =
+        sqlx::query_as("SELECT * FROM chain_operations WHERE id = $1")
+            .bind(input.request_id)
+            .fetch_optional(connection)
+            .await?;
     let Some(existing) = existing else {
         return Ok(None);
     };
@@ -144,8 +145,18 @@ async fn store_asset(
     genesis: &str,
 ) -> Result<Uuid> {
     let id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM assets WHERE nft->>'genesis'=$1 AND lower(nft->>'collection')=$2 AND nft->>'token_id'=$3",
-    ).bind(genesis).bind(&input.collection).bind(&input.token_id).fetch_optional(&mut *connection).await?;
+        "SELECT id
+         FROM assets
+         WHERE
+             nft ->> 'genesis' = $1
+             AND lower(nft ->> 'collection') = $2
+             AND nft ->> 'token_id' = $3",
+    )
+    .bind(genesis)
+    .bind(&input.collection)
+    .bind(&input.token_id)
+    .fetch_optional(&mut *connection)
+    .await?;
     if let Some(id) = id {
         let asset = assets::repository::lock(connection, id).await?;
         if asset.owner_id.is_some()
@@ -156,8 +167,20 @@ async fn store_asset(
                 "This NFT is already held on the platform",
             ));
         }
-        let used: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chain_operations WHERE kind='nft_deposit' AND asset_id=$1 AND transaction_id=$2)")
-            .bind(id).bind(&input.transaction_id).fetch_one(&mut *connection).await?;
+        let used: bool = sqlx::query_scalar(
+            "SELECT EXISTS(
+                 SELECT 1
+                 FROM chain_operations
+                 WHERE
+                     kind = 'nft_deposit'
+                     AND asset_id = $1
+                     AND transaction_id = $2
+             )",
+        )
+        .bind(id)
+        .bind(&input.transaction_id)
+        .fetch_one(&mut *connection)
+        .await?;
         if used {
             return Err(ApiError::Conflict(
                 "This deposit transaction has already been recorded",
@@ -173,13 +196,16 @@ async fn store_asset(
         .clone()
         .unwrap_or_else(|| format!("NFT #{}", input.token_id));
     let nft = json!({"chain_id":ethereum::CHAIN_ID,"genesis":genesis,"collection":input.collection,"token_id":input.token_id});
-    sqlx::query("INSERT INTO assets(id,name,description,owner_id,nft) VALUES($1,$2,'',$3,$4)")
-        .bind(id)
-        .bind(name)
-        .bind(account)
-        .bind(nft)
-        .execute(connection)
-        .await?;
+    sqlx::query(
+        "INSERT INTO assets (id, name, description, owner_id, nft)
+         VALUES ($1, $2, '', $3, $4)",
+    )
+    .bind(id)
+    .bind(name)
+    .bind(account)
+    .bind(nft)
+    .execute(connection)
+    .await?;
     Ok(id)
 }
 
@@ -224,8 +250,19 @@ async fn record(
             &format!("native-receipt:{}", input.request_id),
             &serde_json::to_vec(&receipt).map_err(|_| ApiError::Internal)?,
         )?;
-    sqlx::query("UPDATE chain_operations SET status='confirmed',transaction_id=$2,receipt_sealed=$3 WHERE id=$1")
-        .bind(input.request_id).bind(&input.transaction_id).bind(sealed).execute(&mut *connection).await?;
+    sqlx::query(
+        "UPDATE chain_operations
+         SET
+             status = 'confirmed',
+             transaction_id = $2,
+             receipt_sealed = $3
+         WHERE id = $1",
+    )
+    .bind(input.request_id)
+    .bind(&input.transaction_id)
+    .bind(sealed)
+    .execute(&mut *connection)
+    .await?;
     events::record(
         connection,
         "AssetDeposited.v1",

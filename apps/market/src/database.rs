@@ -15,9 +15,12 @@ pub async fn ready(pool: &PgPool) -> bool {
     let result = tokio::time::timeout(
         Duration::from_secs(3),
         sqlx::query_as::<_, (i64, Vec<u8>, bool)>(
-            "SELECT version, checksum, success
-         FROM _sqlx_migrations
-         ORDER BY version",
+            "SELECT
+                 version,
+                 checksum,
+                 success
+             FROM _sqlx_migrations
+             ORDER BY version",
         )
         .fetch_all(pool),
     )

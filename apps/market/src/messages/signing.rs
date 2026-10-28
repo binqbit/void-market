@@ -36,7 +36,11 @@ pub async fn sign(
     } = binding;
     let custody = state.custody.as_ref().ok_or(ApiError::Unavailable)?;
     let (sealed, public): (Vec<u8>, String) = sqlx::query_as(
-        "SELECT signing_key, signing_public_key FROM custody_keys WHERE account_id=$1",
+        "SELECT
+             signing_key,
+             signing_public_key
+         FROM custody_keys
+         WHERE account_id = $1",
     )
     .bind(account)
     .fetch_one(connection)

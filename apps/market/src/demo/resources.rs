@@ -23,7 +23,7 @@ pub async fn request(state: &AppState, account: Uuid, id: Uuid, kind: &str) -> R
     }
     let actor = demo_repository::actor(&state.pool, account).await?;
     let existing: Option<(Uuid, String)> =
-        sqlx::query_as("SELECT account_id,kind FROM chain_operations WHERE id=$1")
+        sqlx::query_as("SELECT account_id, kind FROM chain_operations WHERE id = $1")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?;

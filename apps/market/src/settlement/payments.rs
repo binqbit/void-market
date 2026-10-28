@@ -43,7 +43,7 @@ pub async fn prepare(
         ));
     }
     let old: Option<(Uuid, Option<Uuid>)> =
-        sqlx::query_as("SELECT account_id,auction_id FROM chain_operations WHERE id=$1")
+        sqlx::query_as("SELECT account_id, auction_id FROM chain_operations WHERE id = $1")
             .bind(input.request_id)
             .fetch_optional(&mut *tx)
             .await?;
@@ -65,8 +65,19 @@ pub async fn prepare(
         return Ok(input.request_id);
     }
     let pending: Vec<(Uuid, Option<serde_json::Value>, Option<String>, String)> = sqlx::query_as(
-        "SELECT id,approval,signed_transaction,status FROM chain_operations WHERE auction_id=$1 AND
-         kind='payment' AND status NOT IN ('confirmed','cancelled')",
+        "SELECT
+             id,
+             approval,
+             signed_transaction,
+             status
+         FROM chain_operations
+         WHERE
+             auction_id = $1
+             AND kind = 'payment'
+             AND status NOT IN (
+                 'confirmed',
+                 'cancelled'
+             )",
     )
     .bind(id)
     .fetch_all(&mut *tx)

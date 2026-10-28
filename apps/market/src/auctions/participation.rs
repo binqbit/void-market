@@ -10,8 +10,16 @@ use uuid::Uuid;
 
 pub async fn cancel_checks(connection: &mut PgConnection, auction: Uuid) -> Result<()> {
     let sessions: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM approval_sessions WHERE auction_id=$1 AND status IN ('initializing','active')
-         ORDER BY id FOR UPDATE",
+        "SELECT id
+         FROM approval_sessions
+         WHERE
+             auction_id = $1
+             AND status IN (
+                 'initializing',
+                 'active'
+             )
+         ORDER BY id
+         FOR UPDATE",
     )
     .bind(auction)
     .fetch_all(&mut *connection)
@@ -31,8 +39,14 @@ pub async fn finish(
 ) -> Result<()> {
     cancel_checks(connection, auction).await?;
     sqlx::query(
-        "UPDATE auctions SET status=$2,reason=$3,finished_at_ms=$4,
-         completion_request_id=NULL,revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = $2,
+             reason = $3,
+             finished_at_ms = $4,
+             completion_request_id = NULL,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(auction)
     .bind(status)
@@ -40,10 +54,14 @@ pub async fn finish(
     .bind(now)
     .execute(&mut *connection)
     .await?;
-    sqlx::query("UPDATE auction_participants SET chargeable=FALSE WHERE auction_id=$1")
-        .bind(auction)
-        .execute(&mut *connection)
-        .await?;
+    sqlx::query(
+        "UPDATE auction_participants
+         SET chargeable = FALSE
+         WHERE auction_id = $1",
+    )
+    .bind(auction)
+    .execute(&mut *connection)
+    .await?;
     events::record_node(
         connection,
         "auction.ended",
@@ -67,8 +85,14 @@ pub async fn exclude(
         return Ok(());
     }
     let changed = sqlx::query(
-        "UPDATE auction_participants SET status=$3,chargeable=FALSE
-         WHERE auction_id=$1 AND account_id=$2 AND status='active'",
+        "UPDATE auction_participants
+         SET
+             status = $3,
+             chargeable = FALSE
+         WHERE
+             auction_id = $1
+             AND account_id = $2
+             AND status = 'active'",
     )
     .bind(auction)
     .bind(account)
@@ -79,8 +103,15 @@ pub async fn exclude(
         return Ok(());
     }
     sqlx::query(
-        "UPDATE approval_members m SET status=$3,chargeable=FALSE
-         FROM approval_sessions s WHERE m.session_id=s.id AND s.auction_id=$1 AND m.account_id=$2",
+        "UPDATE approval_members m
+         SET
+             status = $3,
+             chargeable = FALSE
+         FROM approval_sessions s
+         WHERE
+             m.session_id = s.id
+             AND s.auction_id = $1
+             AND m.account_id = $2",
     )
     .bind(auction)
     .bind(account)
@@ -100,10 +131,28 @@ pub async fn exclude(
     }
 
     let affected: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT s.id FROM approval_sessions s LEFT JOIN auction_checks c ON c.session_id=s.id
-         WHERE s.auction_id=$1 AND (NOT c.precomputed OR EXISTS(
-             SELECT 1 FROM approval_members m WHERE m.session_id=s.id AND m.account_id=$2))
-         AND s.status IN ('initializing','active') ORDER BY s.id FOR UPDATE OF s",
+        "SELECT s.id
+         FROM approval_sessions s
+         LEFT JOIN auction_checks c ON c.session_id = s.id
+         WHERE
+             s.auction_id = $1
+             AND (
+                 NOT c.precomputed
+                 OR EXISTS
+                 (
+                     SELECT 1
+                     FROM approval_members m
+                     WHERE
+                         m.session_id = s.id
+                         AND m.account_id = $2
+                 )
+             )
+             AND s.status IN (
+                 'initializing',
+                 'active'
+             )
+         ORDER BY s.id
+         FOR UPDATE OF s",
     )
     .bind(auction)
     .bind(account)
@@ -123,10 +172,29 @@ pub async fn exclude(
         finish(connection, auction, "no_sale", "no_remaining_buyers", now).await?;
     } else if matches!(current.status.as_str(), "matching" | "awaiting_completion") {
         if current.execution == "localnet" {
-            sqlx::query("UPDATE chain_operations SET status='cancelled',revision=nextval('message_revision') WHERE auction_id=$1 AND status IN ('preparing','ready','failed') AND approval IS NULL")
-                .bind(auction).execute(&mut *connection).await?;
             sqlx::query(
-                "UPDATE auctions SET payment_invoice=NULL,payment_status='unverified' WHERE id=$1",
+                "UPDATE chain_operations
+                 SET
+                     status = 'cancelled',
+                     revision = nextval('message_revision')
+                 WHERE
+                     auction_id = $1
+                     AND status IN (
+                         'preparing',
+                         'ready',
+                         'failed'
+                     )
+                     AND approval IS NULL",
+            )
+            .bind(auction)
+            .execute(&mut *connection)
+            .await?;
+            sqlx::query(
+                "UPDATE auctions
+                 SET
+                     payment_invoice = NULL,
+                     payment_status = 'unverified'
+                 WHERE id = $1",
             )
             .bind(auction)
             .execute(&mut *connection)
@@ -157,8 +225,16 @@ pub async fn exclude(
             ),
         )?;
         sqlx::query(
-            "UPDATE auctions SET status='matching',generation=$2,round_root=$3,winner_id=NULL,
-             completion_request_id=NULL,award_hash=NULL,revision=nextval('message_revision') WHERE id=$1",
+            "UPDATE auctions
+             SET
+                 status = 'matching',
+                 generation = $2,
+                 round_root = $3,
+                 winner_id = NULL,
+                 completion_request_id = NULL,
+                 award_hash = NULL,
+                 revision = nextval('message_revision')
+             WHERE id = $1",
         )
         .bind(auction)
         .bind(generation)
@@ -167,19 +243,37 @@ pub async fn exclude(
         .await?;
         // Exact surviving pairs keep their inputs, commitments and approvals.
         sqlx::query(
-            "UPDATE auction_checks c SET generation=$2,round_root=a.round_root
-             FROM auctions a,auction_participants l,auction_participants r
-             WHERE c.auction_id=$1 AND a.id=c.auction_id AND c.precomputed
-             AND l.auction_id=a.id AND l.account_id=c.left_account AND l.status='active'
-             AND r.auction_id=a.id AND r.account_id=c.right_account AND r.status='active'",
+            "UPDATE auction_checks c
+             SET
+                 generation = $2,
+                 round_root = a.round_root
+             FROM
+                 auctions a,
+                 auction_participants l,
+                 auction_participants r
+             WHERE
+                 c.auction_id = $1
+                 AND a.id = c.auction_id
+                 AND c.precomputed
+                 AND l.auction_id = a.id
+                 AND l.account_id = c.left_account
+                 AND l.status = 'active'
+                 AND r.auction_id = a.id
+                 AND r.account_id = c.right_account
+                 AND r.status = 'active'",
         )
         .bind(auction)
         .bind(generation)
         .execute(&mut *connection)
         .await?;
         sqlx::query(
-            "UPDATE approval_sessions s SET round_generation=$2
-             FROM auction_checks c WHERE c.session_id=s.id AND c.auction_id=$1 AND c.generation=$2",
+            "UPDATE approval_sessions s
+             SET round_generation = $2
+             FROM auction_checks c
+             WHERE
+                 c.session_id = s.id
+                 AND c.auction_id = $1
+                 AND c.generation = $2",
         )
         .bind(auction)
         .bind(generation)
@@ -188,10 +282,14 @@ pub async fn exclude(
     } else {
         return Err(ApiError::Conflict("Participation has already ended"));
     }
-    sqlx::query("UPDATE auction_participants SET chargeable=FALSE WHERE auction_id=$1")
-        .bind(auction)
-        .execute(&mut *connection)
-        .await?;
+    sqlx::query(
+        "UPDATE auction_participants
+         SET chargeable = FALSE
+         WHERE auction_id = $1",
+    )
+    .bind(auction)
+    .execute(&mut *connection)
+    .await?;
     events::record_node(
         connection,
         "auction.participant_excluded",

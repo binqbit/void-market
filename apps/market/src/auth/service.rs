@@ -54,8 +54,8 @@ pub async fn register_finish(
     let credential_id: &[u8] = passkey.cred_id().as_ref();
     let mut tx = state.pool.begin().await?;
     sqlx::query(
-        "INSERT INTO accounts(id, name, credential_id, passkey)
-         VALUES ($1,$2,$3,$4)",
+        "INSERT INTO accounts (id, name, credential_id, passkey)
+         VALUES ($1, $2, $3, $4)",
     )
     .bind(account_id)
     .bind(&name)
@@ -85,15 +85,11 @@ pub async fn register_finish(
 }
 
 pub async fn login_options(state: &AppState, input: LoginOptions) -> Result<Options> {
-    let stored: Value = sqlx::query_scalar(
-        "SELECT passkey
-         FROM accounts
-         WHERE id = $1",
-    )
-    .bind(input.address)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or(ApiError::NotFound)?;
+    let stored: Value = sqlx::query_scalar("SELECT passkey FROM accounts WHERE id = $1")
+        .bind(input.address)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or(ApiError::NotFound)?;
     let passkey: Passkey =
         serde_json::from_value(stored.clone()).map_err(|_| ApiError::Internal)?;
     let (challenge, authentication) = state
@@ -127,14 +123,10 @@ pub async fn login_finish(state: &AppState, input: LoginFinish) -> Result<(Heade
         .map_err(|_| ApiError::Unauthorized)?;
 
     let mut tx = state.pool.begin().await?;
-    let stored: Value = sqlx::query_scalar(
-        "SELECT passkey
-         FROM accounts
-         WHERE id = $1 FOR UPDATE",
-    )
-    .bind(account_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    let stored: Value = sqlx::query_scalar("SELECT passkey FROM accounts WHERE id = $1 FOR UPDATE")
+        .bind(account_id)
+        .fetch_one(&mut *tx)
+        .await?;
     if stored != credential_snapshot {
         return Err(ApiError::Conflict(
             "Credential changed; start a new login ceremony",
@@ -144,14 +136,11 @@ pub async fn login_finish(state: &AppState, input: LoginFinish) -> Result<(Heade
     passkey
         .update_credential(&verified)
         .ok_or(ApiError::Unauthorized)?;
-    sqlx::query(
-        "UPDATE accounts SET passkey = $1
-         WHERE id = $2",
-    )
-    .bind(serde_json::to_value(passkey).map_err(|_| ApiError::Internal)?)
-    .bind(account_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("UPDATE accounts SET passkey = $1 WHERE id = $2")
+        .bind(serde_json::to_value(passkey).map_err(|_| ApiError::Internal)?)
+        .bind(account_id)
+        .execute(&mut *tx)
+        .await?;
     if let Some(custody) = &state.custody {
         custody.provision(&mut tx, account_id).await?;
     }

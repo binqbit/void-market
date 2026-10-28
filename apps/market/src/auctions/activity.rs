@@ -74,12 +74,28 @@ pub async fn list(
         .await?;
 
     let (bids_placed, active_bids, completed_purchases): (i64, i64, i64) = sqlx::query_as(
-        "SELECT count(*),
-             count(*) FILTER (WHERE p.status='active' AND (a.status IN ('open','matching')
-                 OR (a.status='awaiting_completion' AND a.winner_id=$1))),
-             count(*) FILTER (WHERE a.status='completed' AND a.winner_id=$1)
-         FROM auction_participants p JOIN auctions a ON a.id=p.auction_id
-         WHERE p.account_id=$1 AND a.seller_id<>$1",
+        "SELECT
+             count(*),
+             count(*)
+             FILTER (
+                 WHERE p.status = 'active'
+                 AND (
+                     a.status IN ('open', 'matching')
+                     OR (
+                         a.status = 'awaiting_completion'
+                         AND a.winner_id = $1
+                     )
+                 )
+             ),
+             count(*) FILTER (
+                 WHERE a.status = 'completed'
+                 AND a.winner_id = $1
+             )
+         FROM auction_participants p
+         JOIN auctions a ON a.id = p.auction_id
+         WHERE
+             p.account_id = $1
+             AND a.seller_id <> $1",
     )
     .bind(account)
     .fetch_one(&mut *tx)
@@ -88,15 +104,34 @@ pub async fn list(
     let pending_approvals = progress.values().map(|value| value.pending).sum();
 
     let rows: Vec<BidRow> = sqlx::query_as(
-        "SELECT p.*, a.asset_snapshot->>'name' AS asset_name,
-             a.status AS auction_status, a.custody_status, COALESCE(a.winner_id=$1,FALSE) AS is_winner,
+        "SELECT
+             p.*,
+             a.asset_snapshot ->> 'name' AS asset_name,
+             a.status AS auction_status,
+             a.custody_status,
+             COALESCE(a.winner_id = $1, FALSE) AS is_winner,
              a.closes_at_ms
-         FROM auction_participants p JOIN auctions a ON a.id=p.auction_id
-         WHERE p.account_id=$1 AND a.seller_id<>$1
-         ORDER BY (p.status='active' AND (a.status IN ('open','matching')
-             OR (a.status='awaiting_completion' AND a.winner_id=$1))) DESC,
-             p.created_at_ms DESC, p.id DESC
-         LIMIT $2 OFFSET $3",
+         FROM auction_participants p
+         JOIN auctions a ON a.id = p.auction_id
+         WHERE
+             p.account_id = $1
+             AND a.seller_id <> $1
+         ORDER BY (
+             p.status = 'active'
+             AND (a.status IN (
+                 'open',
+                 'matching'
+             )
+             OR (
+                 a.status = 'awaiting_completion'
+                 AND a.winner_id = $1
+             ))
+         ) DESC,
+         p.created_at_ms DESC,
+         p.id DESC
+         LIMIT
+             $2
+             OFFSET $3",
     )
     .bind(account)
     .bind(limit)
@@ -143,27 +178,69 @@ async fn approval_progress(
 ) -> Result<HashMap<Uuid, ApprovalProgress>> {
     let rows: Vec<ApprovalRow> = sqlx::query_as(
         "WITH requests AS (
-             SELECT s.auction_id, m.approval IS NOT NULL AS approved,
-                 (m.status='ready' AND s.status='active' AND member.status='active') AS actionable
+             SELECT
+                 s.auction_id,
+                 m.approval IS NOT NULL
+                     AS
+                     approved,
+                 (
+                     m.status = 'ready'
+                     AND s.status = 'active'
+                     AND member.status = 'active'
+                 ) AS actionable
              FROM approval_messages m
-             JOIN approval_sessions s ON s.id=m.session_id
-             JOIN approval_members member ON member.session_id=s.id AND member.account_id=m.account_id
-             WHERE m.account_id=$1 AND m.status<>'cancelled' AND s.auction_id IS NOT NULL
+             JOIN approval_sessions s ON s.id = m.session_id
+             JOIN approval_members member
+                 ON member.session_id = s.id
+                     AND member.account_id = m.account_id
+             WHERE
+                 m.account_id = $1
+                 AND m.status <> 'cancelled'
+                 AND s.auction_id IS NOT NULL
              UNION ALL
-             SELECT auction_id, approval IS NOT NULL, status='ready'
+             SELECT
+                 auction_id,
+                 approval IS
+                 NOT NULL,
+                 status = 'ready'
              FROM chain_operations
-             WHERE account_id=$1 AND kind='payment'
-                 AND status NOT IN ('preparing','failed','cancelled') AND auction_id IS NOT NULL
+             WHERE
+                 account_id = $1
+                 AND kind = 'payment'
+                 AND status NOT IN (
+                     'preparing',
+                     'failed',
+                     'cancelled'
+                 )
+                 AND auction_id IS NOT NULL
          )
-         SELECT r.auction_id, count(*) AS requested,
-             count(*) FILTER (WHERE r.approved) AS approved,
-             count(*) FILTER (WHERE r.actionable AND NOT r.approved AND p.status='active'
-                 AND p.remaining_ms>0 AND (a.status IN ('open','matching')
-                     OR (a.status='awaiting_completion' AND a.winner_id=$1))) AS pending
+
+         SELECT
+             r.auction_id,
+             count(*) AS requested,
+             count(*) FILTER (
+                 WHERE r.approved
+             ) AS approved,
+             count(*) FILTER (
+                 WHERE r.actionable
+                 AND NOT r.approved
+                 AND p.status = 'active'
+                 AND p.remaining_ms > 0
+                 AND (
+                     a.status IN ('open', 'matching')
+                     OR (
+                         a.status = 'awaiting_completion'
+                         AND a.winner_id = $1
+                     )
+                 )
+             ) AS pending
          FROM requests r
-         JOIN auctions a ON a.id=r.auction_id
-         JOIN auction_participants p ON p.auction_id=a.id AND p.account_id=$1
-         WHERE a.seller_id<>$1 GROUP BY r.auction_id",
+         JOIN auctions a ON a.id = r.auction_id
+         JOIN auction_participants p
+             ON p.auction_id = a.id
+                 AND p.account_id = $1
+         WHERE a.seller_id <> $1
+         GROUP BY r.auction_id",
     )
     .bind(account)
     .fetch_all(connection)

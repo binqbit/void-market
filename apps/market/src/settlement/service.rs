@@ -35,16 +35,27 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         ),
     };
     let (remaining_ms, timer_running) = if let Some(auction) = operation.auction_id {
-        let row:Option<(i64,bool)>=sqlx::query_as(
-            "SELECT p.remaining_ms,p.chargeable AND a.closes_at_ms-3600000<=$3 AND COALESCE(r.healthy AND r.last_tick_ms>$3-5000,FALSE) FROM
-         auction_participants p JOIN auctions a ON a.id=p.auction_id
-         LEFT JOIN localnet_runtime r ON r.singleton WHERE p.auction_id=$1 AND
-         p.account_id=$2",
+        let row: Option<(i64, bool)> = sqlx::query_as(
+            "SELECT
+                 p.remaining_ms,
+                 p.chargeable
+                 AND a.closes_at_ms - 3600000 <= $3
+                 AND COALESCE(
+                     r.healthy
+                     AND r.last_tick_ms > $3 - 5000, FALSE
+                 )
+             FROM auction_participants p
+             JOIN auctions a ON a.id = p.auction_id
+             LEFT JOIN localnet_runtime r ON r.singleton
+             WHERE
+                 p.auction_id = $1
+                 AND p.account_id = $2",
         )
         .bind(auction)
         .bind(account)
         .bind(messages::now_ms()?)
-        .fetch_optional(&state.pool).await?;
+        .fetch_optional(&state.pool)
+        .await?;
         row.map(|(remaining, running)| (Some(remaining), running))
             .unwrap_or((None, false))
     } else {
@@ -81,7 +92,7 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         operation.recipient_id.filter(|id| *id != account)
     };
     let counterparty = if let Some(id) = counterparty_id {
-        sqlx::query_as("SELECT id AS address,name,username FROM accounts WHERE id=$1")
+        sqlx::query_as("SELECT id AS address, name, username FROM accounts WHERE id = $1")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?
@@ -89,7 +100,7 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         None
     };
     let auction_title = if let Some(id) = operation.auction_id {
-        sqlx::query_scalar("SELECT asset_snapshot->>'name' FROM auctions WHERE id=$1")
+        sqlx::query_scalar("SELECT asset_snapshot ->> 'name' FROM auctions WHERE id = $1")
             .bind(id)
             .fetch_optional(&state.pool)
             .await?
@@ -122,8 +133,21 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         match operation.kind.as_str() {
             "airdrop" | "mint" => state.chains.is_some(),
             "payment" if remaining_ms.is_some_and(|left| left > 0) => {
-                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auctions WHERE id=$1 AND status='awaiting_completion' AND winner_id=$2 AND payment_status<>'confirmed')")
-                    .bind(operation.auction_id).bind(account).fetch_one(&state.pool).await?
+                sqlx::query_scalar(
+                    "SELECT EXISTS(
+                         SELECT 1
+                         FROM auctions
+                         WHERE
+                             id = $1
+                             AND status = 'awaiting_completion'
+                             AND winner_id = $2
+                             AND payment_status <> 'confirmed'
+                     )",
+                )
+                .bind(operation.auction_id)
+                .bind(account)
+                .fetch_one(&state.pool)
+                .await?
             }
             _ => false,
         }
@@ -183,14 +207,24 @@ pub async fn list_page(
     if state.chains.is_none() {
         return Ok(Vec::new());
     }
-    let ids:Vec<Uuid>=sqlx::query_scalar(
-        "SELECT id FROM chain_operations WHERE account_id=$1 OR recipient_id=$1 ORDER BY created_at_ms
-         DESC,id LIMIT $2 OFFSET $3",
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id
+         FROM chain_operations
+         WHERE
+             account_id = $1
+             OR recipient_id = $1
+         ORDER BY
+             created_at_ms DESC,
+             id
+         LIMIT
+             $2
+             OFFSET $3",
     )
     .bind(account)
     .bind(limit)
     .bind(offset)
-    .fetch_all(&state.pool).await?;
+    .fetch_all(&state.pool)
+    .await?;
     let mut result = Vec::with_capacity(ids.len());
     for id in ids {
         result.push(view(state, account, id).await?);
@@ -231,10 +265,19 @@ pub async fn approve(
         ));
     }
     if let Some(auction) = operation.auction_id {
-        let (remaining,status):(i64,String)=sqlx::query_as("SELECT remaining_ms,status FROM auction_participants WHERE auction_id=$1 AND account_id=$2")
-            .bind(auction)
-            .bind(account)
-            .fetch_one(&mut *tx).await?;
+        let (remaining, status): (i64, String) = sqlx::query_as(
+            "SELECT
+                 remaining_ms,
+                 status
+             FROM auction_participants
+             WHERE
+                 auction_id = $1
+                 AND account_id = $2",
+        )
+        .bind(auction)
+        .bind(account)
+        .fetch_one(&mut *tx)
+        .await?;
         if remaining <= 0 || status != "active" {
             return Err(ApiError::Conflict("The auction approval budget expired"));
         }
@@ -248,12 +291,20 @@ pub async fn approve(
         &repository::payload(state, &operation)?,
     )
     .await?;
-    sqlx::query("UPDATE chain_operations SET
-         approval=$2,status='approved',revision=nextval('message_revision'),updated_at_ms=$3 WHERE id=$1")
-        .bind(id)
-        .bind(receipt)
-        .bind(messages::now_ms()?)
-        .execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE chain_operations
+         SET
+             approval = $2,
+             status = 'approved',
+             revision = nextval('message_revision'),
+             updated_at_ms = $3
+         WHERE id = $1",
+    )
+    .bind(id)
+    .bind(receipt)
+    .bind(messages::now_ms()?)
+    .execute(&mut *tx)
+    .await?;
     if let Some(auction) = operation.auction_id {
         crate::auctions::refresh_charging(&mut tx, auction).await?;
     }

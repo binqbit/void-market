@@ -28,9 +28,8 @@ impl Repository {
 
     pub async fn identity(&self, public_key: &str) -> Result<Uuid> {
         sqlx::query(
-            "INSERT INTO node_identity(node_id, instance_id, public_key)
-             VALUES ($1, $2, $3)
-             ON CONFLICT DO NOTHING",
+            "INSERT INTO node_identity (node_id, instance_id, public_key)
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
         )
         .bind(self.node)
         .bind(Uuid::new_v4())
@@ -38,7 +37,7 @@ impl Repository {
         .execute(&self.pool)
         .await?;
         let (instance, key): (Uuid, String) =
-            sqlx::query_as("SELECT instance_id,public_key FROM node_identity WHERE node_id=$1")
+            sqlx::query_as("SELECT instance_id, public_key FROM node_identity WHERE node_id = $1")
                 .bind(self.node)
                 .fetch_one(&self.pool)
                 .await?;
@@ -52,8 +51,7 @@ impl Repository {
         Ok(sqlx::query_scalar(
             "UPDATE node_identity
              SET heartbeat_sequence = heartbeat_sequence + 1
-             WHERE node_id = $1
-             RETURNING heartbeat_sequence",
+             WHERE node_id = $1 RETURNING heartbeat_sequence",
         )
         .bind(self.node)
         .fetch_one(&self.pool)
@@ -62,10 +60,13 @@ impl Repository {
 
     pub async fn started(&self, job: &Job) -> Result<()> {
         sqlx::query(
-            "INSERT INTO node_attempts(node_id, job_id, generation, status)
-             VALUES ($1, $2, $3, 'running')
-             ON CONFLICT (node_id, job_id) DO UPDATE
-             SET generation = EXCLUDED.generation, status = 'running', pending_result = NULL",
+            "INSERT INTO node_attempts (node_id, job_id, generation, status)
+             VALUES ($1, $2, $3, 'running') ON CONFLICT (node_id, job_id) DO
+             UPDATE
+                 SET
+                     generation = EXCLUDED.generation,
+                     status = 'running',
+                     pending_result = NULL",
         )
         .bind(self.node)
         .bind(job.id)
@@ -78,10 +79,13 @@ impl Repository {
     pub async fn prepare(&self, result: &Completion) -> Result<()> {
         let changed = sqlx::query(
             "UPDATE node_attempts
-             SET status = 'result_pending', pending_result = $3
-             WHERE node_id = $1
-             AND job_id = $2
-             AND generation = $4",
+             SET
+                 status = 'result_pending',
+                 pending_result = $3
+             WHERE
+                 node_id = $1
+                 AND job_id = $2
+                 AND generation = $4",
         )
         .bind(self.node)
         .bind(result.job_id)
@@ -97,7 +101,13 @@ impl Repository {
 
     pub async fn delivered(&self, result: &Completion) -> Result<()> {
         sqlx::query(
-            "UPDATE node_attempts SET status=$3,pending_result=NULL WHERE node_id=$1 AND job_id=$2",
+            "UPDATE node_attempts
+             SET
+                 status = $3,
+                 pending_result = NULL
+             WHERE
+                 node_id = $1
+                 AND job_id = $2",
         )
         .bind(self.node)
         .bind(result.job_id)
@@ -109,8 +119,11 @@ impl Repository {
 
     pub async fn pending(&self) -> Result<Vec<Completion>> {
         let values: Vec<serde_json::Value> = sqlx::query_scalar(
-            "SELECT pending_result FROM node_attempts
-             WHERE node_id = $1 AND pending_result IS NOT NULL",
+            "SELECT pending_result
+             FROM node_attempts
+             WHERE
+                 node_id = $1
+                 AND pending_result IS NOT NULL",
         )
         .bind(self.node)
         .fetch_all(&self.pool)
@@ -123,8 +136,16 @@ impl Repository {
 
     pub async fn unfinished(&self) -> Result<Vec<(Uuid, i64)>> {
         Ok(sqlx::query_as(
-            "SELECT job_id, generation FROM node_attempts
-             WHERE node_id = $1 AND status IN ('running', 'waiting')",
+            "SELECT
+                 job_id,
+                 generation
+             FROM node_attempts
+             WHERE
+                 node_id = $1
+                 AND status IN (
+                     'running',
+                     'waiting'
+                 )",
         )
         .bind(self.node)
         .fetch_all(&self.pool)

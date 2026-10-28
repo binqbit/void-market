@@ -39,10 +39,11 @@ pub async fn prepare(
     }
     let mut tx = state.pool.begin().await?;
     let item = assets::repository::lock(&mut tx, asset).await?;
-    let existing: Option<Operation> = sqlx::query_as("SELECT * FROM chain_operations WHERE id=$1")
-        .bind(input.request_id)
-        .fetch_optional(&mut *tx)
-        .await?;
+    let existing: Option<Operation> =
+        sqlx::query_as("SELECT * FROM chain_operations WHERE id = $1")
+            .bind(input.request_id)
+            .fetch_optional(&mut *tx)
+            .await?;
     if let Some(existing) = existing {
         if existing.account_id == account
             && existing.asset_id == Some(asset)
@@ -111,7 +112,7 @@ pub async fn prepare(
         },
     )
     .await?;
-    sqlx::query("UPDATE assets SET pending_transaction_id=$2 WHERE id=$1")
+    sqlx::query("UPDATE assets SET pending_transaction_id = $2 WHERE id = $1")
         .bind(asset)
         .bind(input.request_id)
         .execute(&mut *tx)
@@ -140,7 +141,11 @@ pub async fn cancel(state: &AppState, account: Uuid, id: Uuid) -> Result<()> {
     }
     repository::status(&mut tx, id, "cancelled", None).await?;
     sqlx::query(
-        "UPDATE assets SET pending_transaction_id=NULL WHERE id=$1 AND pending_transaction_id=$2",
+        "UPDATE assets
+         SET pending_transaction_id = NULL
+         WHERE
+             id = $1
+             AND pending_transaction_id = $2",
     )
     .bind(asset)
     .bind(id)

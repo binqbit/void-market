@@ -54,8 +54,10 @@ pub async fn bid(state: &AppState, buyer: Uuid, id: Uuid, input: PlaceBid) -> Re
     admit(&auction, buyer, value, now)?;
     capacity(&mut tx, &auction).await?;
     let sequence: i64 = sqlx::query_scalar(
-        "INSERT INTO auction_participants(auction_id,account_id,id,input_sealed,frozen_input,created_at_ms)
-         VALUES($1,$2,$3,$4,$5,$6) RETURNING admission_seq",
+        "INSERT INTO auction_participants (
+             auction_id, account_id, id, input_sealed, frozen_input, created_at_ms
+         )
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING admission_seq",
     )
     .bind(id)
     .bind(buyer)
@@ -88,7 +90,11 @@ pub async fn bid(state: &AppState, buyer: Uuid, id: Uuid, input: PlaceBid) -> Re
     )
     .await?;
     sqlx::query(
-        "UPDATE auction_participants SET admission_receipt=$3 WHERE auction_id=$1 AND account_id=$2",
+        "UPDATE auction_participants
+         SET admission_receipt = $3
+         WHERE
+             auction_id = $1
+             AND account_id = $2",
     )
     .bind(id)
     .bind(buyer)
@@ -197,7 +203,11 @@ pub async fn withdraw(state: &AppState, buyer: Uuid, id: Uuid) -> Result<Value> 
     .await?;
     participation::exclude(&mut tx, id, buyer, "withdrawn").await?;
     sqlx::query(
-        "UPDATE auction_participants SET exit_receipt=$3 WHERE auction_id=$1 AND account_id=$2",
+        "UPDATE auction_participants
+         SET exit_receipt = $3
+         WHERE
+             auction_id = $1
+             AND account_id = $2",
     )
     .bind(id)
     .bind(buyer)
@@ -319,24 +329,33 @@ pub async fn complete(
     receipt["payment_status"] = json!("unverified");
     assets::repository::change_owner(&mut tx, asset.id, winner).await?;
     transfers::repository::insert(&mut tx, transfer, asset.id, seller, winner).await?;
-    sqlx::query("UPDATE transfers SET auction_id=$2 WHERE id=$1")
+    sqlx::query("UPDATE transfers SET auction_id = $2 WHERE id = $1")
         .bind(transfer)
         .bind(id)
         .execute(&mut *tx)
         .await?;
     sqlx::query(
-        "UPDATE auctions SET status='completed',completion_receipt=$2,finished_at_ms=$3,
-        revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = 'completed',
+             completion_receipt = $2,
+             finished_at_ms = $3,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(id)
     .bind(&receipt)
     .bind(now)
     .execute(&mut *tx)
     .await?;
-    sqlx::query("UPDATE auction_participants SET chargeable=FALSE WHERE auction_id=$1")
-        .bind(id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE auction_participants
+         SET chargeable = FALSE
+         WHERE auction_id = $1",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
     events::record(
         &mut tx,
         "AssetTransferred.v1",
@@ -359,7 +378,11 @@ async fn capacity(
     auction: &super::model::AuctionRow,
 ) -> Result<()> {
     let count: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM auction_participants WHERE auction_id=$1 AND account_id<>$2",
+        "SELECT count(*)
+         FROM auction_participants
+         WHERE
+             auction_id = $1
+             AND account_id <> $2",
     )
     .bind(auction.id)
     .bind(auction.seller_id)

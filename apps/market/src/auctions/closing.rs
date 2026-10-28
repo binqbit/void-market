@@ -59,7 +59,7 @@ pub async fn close(state: &AppState, seller: Uuid, id: Uuid) -> Result<()> {
     )
     .await?;
 
-    sqlx::query("UPDATE auctions SET closes_at_ms=$2 WHERE id=$1")
+    sqlx::query("UPDATE auctions SET closes_at_ms = $2 WHERE id = $1")
         .bind(id)
         .bind(now + APPROVAL_WINDOW_MS)
         .execute(&mut *tx)

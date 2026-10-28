@@ -13,7 +13,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 pub async fn get(pool: &PgPool, id: Uuid) -> Result<AuctionRow> {
-    sqlx::query_as("SELECT * FROM auctions WHERE id=$1")
+    sqlx::query_as("SELECT * FROM auctions WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await?
@@ -21,7 +21,7 @@ pub async fn get(pool: &PgPool, id: Uuid) -> Result<AuctionRow> {
 }
 
 pub async fn lock(connection: &mut PgConnection, id: Uuid) -> Result<AuctionRow> {
-    sqlx::query_as("SELECT * FROM auctions WHERE id=$1 FOR UPDATE")
+    sqlx::query_as("SELECT * FROM auctions WHERE id = $1 FOR UPDATE")
         .bind(id)
         .fetch_optional(connection)
         .await?
@@ -33,7 +33,10 @@ pub async fn participants(
     auction: Uuid,
 ) -> Result<Vec<Participant>> {
     Ok(sqlx::query_as(
-        "SELECT * FROM auction_participants WHERE auction_id=$1 ORDER BY admission_seq",
+        "SELECT *
+         FROM auction_participants
+         WHERE auction_id = $1
+         ORDER BY admission_seq",
     )
     .bind(auction)
     .fetch_all(connection)
@@ -41,16 +44,20 @@ pub async fn participants(
 }
 
 pub async fn touch(connection: &mut PgConnection, auction: Uuid) -> Result<()> {
-    sqlx::query("UPDATE auctions SET revision=nextval('message_revision') WHERE id=$1")
-        .bind(auction)
-        .execute(connection)
-        .await?;
+    sqlx::query(
+        "UPDATE auctions
+         SET revision = nextval('message_revision')
+         WHERE id = $1",
+    )
+    .bind(auction)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
 async fn account(pool: &PgPool, account: Uuid) -> Result<Account> {
     Ok(
-        sqlx::query_as("SELECT id AS address, name, username FROM accounts WHERE id=$1")
+        sqlx::query_as("SELECT id AS address, name, username FROM accounts WHERE id = $1")
             .bind(account)
             .fetch_one(pool)
             .await?,
@@ -62,7 +69,7 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .execute(&mut *connection)
         .await?;
-    let auction: AuctionRow = sqlx::query_as("SELECT * FROM auctions WHERE id=$1")
+    let auction: AuctionRow = sqlx::query_as("SELECT * FROM auctions WHERE id = $1")
         .bind(id)
         .fetch_optional(&mut *connection)
         .await?
@@ -89,7 +96,11 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     }
 
     let checks_completed: i64 = sqlx::query_scalar(
-        "SELECT count(result) FROM auction_checks WHERE auction_id=$1 AND generation=$2",
+        "SELECT count(result)
+         FROM auction_checks
+         WHERE
+             auction_id = $1
+             AND generation = $2",
     )
     .bind(id)
     .bind(auction.generation)
@@ -97,7 +108,13 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     .await?;
     let healthy = super::clock::healthy(&mut connection, &auction, now).await?;
     let wallet_ready: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM custody_keys WHERE account_id=$1 AND he_status='ready')",
+        "SELECT EXISTS(
+             SELECT 1
+             FROM custody_keys
+             WHERE
+                 account_id = $1
+                 AND he_status = 'ready'
+         )",
     )
     .bind(viewer)
     .fetch_one(&mut *connection)
@@ -114,9 +131,11 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         let expected =
             crate::settlement::auction::amount_due(state, &mut connection, &auction).await?;
         let credited = crate::settlement::auction::paid(state, &mut connection, &auction).await?;
-        Some(
-            serde_json::json!({"expected":amount::format(expected),"paid":amount::format(credited),"remaining":amount::format(expected.saturating_sub(credited))}),
-        )
+        Some(serde_json::json!({
+            "expected": amount::format(expected),
+            "paid": amount::format(credited),
+            "remaining": amount::format(expected.saturating_sub(credited)),
+        }))
     } else {
         None
     };
@@ -253,8 +272,16 @@ pub async fn list(
     let ids: Vec<Uuid> = if mine {
         let account = viewer.ok_or(ApiError::Unauthorized)?;
         sqlx::query_scalar(
-            "SELECT a.id FROM auctions a JOIN auction_participants p ON p.auction_id=a.id
-             WHERE p.account_id=$1 ORDER BY a.created_at_ms DESC, a.id DESC LIMIT $2 OFFSET $3",
+            "SELECT a.id
+             FROM auctions a
+             JOIN auction_participants p ON p.auction_id = a.id
+             WHERE p.account_id = $1
+             ORDER BY
+                 a.created_at_ms DESC,
+                 a.id DESC
+             LIMIT
+                 $2
+                 OFFSET $3",
         )
         .bind(account)
         .bind(limit)
@@ -263,10 +290,25 @@ pub async fn list(
         .await?
     } else {
         sqlx::query_scalar(
-            "SELECT a.id FROM auctions a WHERE a.status='open' AND a.closes_at_ms-$2>$1
-             AND (SELECT count(*) FROM auction_participants p
-                  WHERE p.auction_id=a.id AND p.account_id<>a.seller_id)<a.buyer_limit
-             ORDER BY a.created_at_ms DESC, a.id DESC LIMIT $3 OFFSET $4",
+            "SELECT a.id
+             FROM auctions a
+             WHERE
+                 a.status = 'open'
+                 AND a.closes_at_ms - $2 > $1
+                 AND
+                 (
+                     SELECT count(*)
+                     FROM auction_participants p
+                     WHERE
+                         p.auction_id = a.id
+                         AND p.account_id <> a.seller_id
+                 ) < a.buyer_limit
+             ORDER BY
+                 a.created_at_ms DESC,
+                 a.id DESC
+             LIMIT
+                 $3
+                 OFFSET $4",
         )
         .bind(messages::now_ms()?)
         .bind(super::model::APPROVAL_WINDOW_MS)
@@ -297,8 +339,10 @@ pub async fn list(
 
 pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
     Ok(sqlx::query_scalar(
-        "SELECT COALESCE(max(a.revision),0) FROM auctions a JOIN auction_participants p
-         ON p.auction_id=a.id WHERE p.account_id=$1",
+        "SELECT COALESCE(max(a.revision), 0)
+         FROM auctions a
+         JOIN auction_participants p ON p.auction_id = a.id
+         WHERE p.account_id = $1",
     )
     .bind(account)
     .fetch_one(pool)
@@ -307,8 +351,15 @@ pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
 
 pub async fn pending_sales(state: &AppState, account: Uuid) -> Result<Vec<SaleRequest>> {
     let ids: Vec<(Uuid, i64)> = sqlx::query_as(
-        "SELECT id,COALESCE(completion_requested_at_ms,created_at_ms) FROM auctions WHERE seller_id=$1 AND status='awaiting_completion'
-         ORDER BY created_at_ms LIMIT 100",
+        "SELECT
+             id,
+             COALESCE(completion_requested_at_ms, created_at_ms)
+         FROM auctions
+         WHERE
+             seller_id = $1
+             AND status = 'awaiting_completion'
+         ORDER BY created_at_ms
+         LIMIT 100",
     )
     .bind(account)
     .fetch_all(&state.pool)

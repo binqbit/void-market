@@ -79,7 +79,7 @@ pub(crate) async fn custodian(
     auction: &AuctionRow,
 ) -> Result<String> {
     let value: Option<String> =
-        sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id=$1")
+        sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id = $1")
             .bind(auction.node_id)
             .fetch_one(connection)
             .await?;
@@ -146,10 +146,16 @@ pub(crate) async fn return_asset(
         },
     )
     .await?;
-    sqlx::query("UPDATE auctions SET custody_status='return_pending',revision=nextval('message_revision') WHERE
-         id=$1")
-        .bind(auction.id)
-        .execute(connection).await?;
+    sqlx::query(
+        "UPDATE auctions
+         SET
+             custody_status = 'return_pending',
+             revision = nextval('message_revision')
+         WHERE id = $1",
+    )
+    .bind(auction.id)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
@@ -183,12 +189,18 @@ pub(crate) async fn deliver(
         },
     )
     .await?;
-    sqlx::query("UPDATE auctions SET
-         custody_status='delivery_pending',completion_receipt=$2,revision=nextval('message_revision')
-         WHERE id=$1")
-        .bind(auction.id)
-        .bind(approval)
-        .execute(connection).await?;
+    sqlx::query(
+        "UPDATE auctions
+         SET
+             custody_status = 'delivery_pending',
+             completion_receipt = $2,
+             revision = nextval('message_revision')
+         WHERE id = $1",
+    )
+    .bind(auction.id)
+    .bind(approval)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
@@ -197,9 +209,17 @@ pub(crate) async fn paid(
     connection: &mut PgConnection,
     auction: &AuctionRow,
 ) -> Result<u64> {
-    let values:Vec<Vec<u8>>=sqlx::query_scalar("SELECT value_sealed FROM payment_credits WHERE auction_id=$1 ORDER BY transaction_id,output_index")
-        .bind(auction.id)
-        .fetch_all(connection).await?;
+    let values: Vec<Vec<u8>> = sqlx::query_scalar(
+        "SELECT value_sealed
+         FROM payment_credits
+         WHERE auction_id = $1
+         ORDER BY
+             transaction_id,
+             output_index",
+    )
+    .bind(auction.id)
+    .fetch_all(connection)
+    .await?;
     let owner = auction.winner_id.ok_or(ApiError::Internal)?;
     let mut total = 0u64;
     for value in values {
@@ -235,11 +255,26 @@ pub(crate) async fn amount_due(
 
 pub(crate) async fn payment_started(connection: &mut PgConnection, id: Uuid) -> Result<bool> {
     Ok(sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM chain_operations WHERE auction_id=$1 AND kind='payment' AND approval
-         IS NOT NULL) OR EXISTS(SELECT 1 FROM payment_credits WHERE auction_id=$1)",
+        "SELECT
+             EXISTS
+             (
+                 SELECT 1
+                 FROM chain_operations
+                 WHERE
+                     auction_id = $1
+                     AND kind = 'payment'
+                     AND approval IS NOT NULL
+             )
+             OR EXISTS
+             (
+                 SELECT 1
+                 FROM payment_credits
+                 WHERE auction_id = $1
+             )",
     )
     .bind(id)
-    .fetch_one(connection).await?)
+    .fetch_one(connection)
+    .await?)
 }
 
 pub(crate) async fn ensure_payment(
@@ -251,8 +286,18 @@ pub(crate) async fn ensure_payment(
         return Ok(());
     }
     let active: bool = sqlx::query_scalar(
-        "SELECT COALESCE((SELECT status<>'confirmed' FROM chain_operations WHERE auction_id=$1 AND
-         kind='payment' AND status<>'cancelled' ORDER BY created_at_ms DESC LIMIT 1),FALSE)",
+        "SELECT COALESCE(
+             (
+                 SELECT status <> 'confirmed'
+                 FROM chain_operations
+                 WHERE
+                     auction_id = $1
+                     AND kind = 'payment'
+                     AND status <> 'cancelled'
+                 ORDER BY created_at_ms DESC
+                 LIMIT 1
+             ), FALSE
+         )",
     )
     .bind(auction.id)
     .fetch_one(&mut *connection)
@@ -326,7 +371,7 @@ pub(crate) async fn create_payment(
             &format!("payment-invoice:{}", auction.id),
             &serde_json::to_vec(&invoice).map_err(|_| ApiError::Internal)?,
         )?;
-        sqlx::query("UPDATE auctions SET payment_invoice=$2 WHERE id=$1")
+        sqlx::query("UPDATE auctions SET payment_invoice = $2 WHERE id = $1")
             .bind(auction.id)
             .bind(sealed)
             .execute(&mut *connection)
@@ -389,8 +434,15 @@ pub(crate) async fn create_payment(
         },
     )
     .await?;
-    sqlx::query("UPDATE auctions SET payment_status='pending',revision=nextval('message_revision') WHERE id=$1")
-        .bind(auction.id)
-        .execute(connection).await?;
+    sqlx::query(
+        "UPDATE auctions
+         SET
+             payment_status = 'pending',
+             revision = nextval('message_revision')
+         WHERE id = $1",
+    )
+    .bind(auction.id)
+    .execute(connection)
+    .await?;
     Ok(())
 }

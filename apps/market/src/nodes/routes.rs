@@ -90,12 +90,20 @@ async fn registration(
     }
     let changed = sqlx::query(
         "UPDATE arbiter_nodes
-         SET instance_id=$2, capacity=$3, heartbeat_sequence=$4, session_capacity=$5,
-         heartbeat_until=now()+interval '90 seconds'
-         WHERE id=$1
-         AND (instance_id IS NULL OR instance_id=$2)
-         AND heartbeat_sequence<$4
-         AND enabled",
+         SET
+             instance_id = $2,
+             capacity = $3,
+             heartbeat_sequence = $4,
+             session_capacity = $5,
+             heartbeat_until = now() + interval '90 seconds'
+         WHERE
+             id = $1
+             AND (
+                 instance_id IS NULL
+                 OR instance_id = $2
+             )
+             AND heartbeat_sequence < $4
+             AND enabled",
     )
     .bind(actor.request.node_id)
     .bind(input.instance_id)
@@ -124,11 +132,29 @@ async fn registration(
 async fn jobs(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
     let actor = authentication::authorize(&state, &request, &[], false).await?;
     let rows: Vec<Row> = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
+        "SELECT
+             id,
+             node_id,
+             input,
+             status,
+             generation,
+             instance_id,
+             response,
+             output,
+             cancel_requested,
+             interactive
          FROM arbiter_jobs
-         WHERE node_id=$1
-         AND status IN ('queued', 'running', 'waiting', 'result_pending')
-         ORDER BY created_at, id
+         WHERE
+             node_id = $1
+             AND status IN (
+                 'queued',
+                 'running',
+                 'waiting',
+                 'result_pending'
+             )
+         ORDER BY
+             created_at,
+             id
          LIMIT 100",
     )
     .bind(actor.request.node_id)
@@ -145,10 +171,21 @@ async fn job(
 ) -> Result<HttpResponse> {
     let actor = authentication::authorize(&state, &request, &[], false).await?;
     let row: Row = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
+        "SELECT
+             id,
+             node_id,
+             input,
+             status,
+             generation,
+             instance_id,
+             response,
+             output,
+             cancel_requested,
+             interactive
          FROM arbiter_jobs
-         WHERE node_id=$1
-         AND id=$2",
+         WHERE
+             node_id = $1
+             AND id = $2",
     )
     .bind(actor.request.node_id)
     .bind(*id)
@@ -183,8 +220,13 @@ async fn claim(
         return Ok(reply(response));
     }
     let capacity: Option<i16> = sqlx::query_scalar(
-        "SELECT session_capacity FROM arbiter_nodes
-         WHERE id = $1 AND heartbeat_until > now() AND enabled FOR UPDATE",
+        "SELECT session_capacity
+         FROM arbiter_nodes
+         WHERE
+             id = $1
+             AND heartbeat_until > now()
+             AND enabled
+         FOR UPDATE",
     )
     .bind(actor.request.node_id)
     .fetch_optional(&mut *tx)
@@ -193,8 +235,13 @@ async fn claim(
     let running: i64 = sqlx::query_scalar(
         "SELECT count(*)
          FROM arbiter_jobs
-         WHERE node_id=$1
-         AND status IN ('running', 'waiting', 'result_pending')",
+         WHERE
+             node_id = $1
+             AND status IN (
+                 'running',
+                 'waiting',
+                 'result_pending'
+             )",
     )
     .bind(actor.request.node_id)
     .fetch_one(&mut *tx)
@@ -204,13 +251,26 @@ async fn claim(
     }
     let row: Row = sqlx::query_as(
         "UPDATE arbiter_jobs
-         SET status='running', generation=generation+1, instance_id=$3,
-         lease_until=now()+interval '90 seconds'
-         WHERE id=$1
-         AND node_id=$2
-         AND status='queued'
-         AND generation=$4
-         RETURNING id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive",
+         SET
+             status = 'running',
+             generation = generation + 1,
+             instance_id = $3,
+             lease_until = now() + interval '90 seconds'
+         WHERE
+             id = $1
+             AND node_id = $2
+             AND status = 'queued'
+             AND generation = $4 RETURNING
+             id,
+             node_id,
+             input,
+             status,
+             generation,
+             instance_id,
+             response,
+             output,
+             cancel_requested,
+             interactive",
     )
     .bind(*id)
     .bind(actor.request.node_id)
@@ -239,12 +299,17 @@ async fn renew(
     }
     let changed = sqlx::query(
         "UPDATE arbiter_jobs
-         SET lease_until=now()+interval '90 seconds'
-         WHERE id=$1
-         AND node_id=$2
-         AND instance_id=$3
-         AND generation=$4
-         AND status IN ('running', 'waiting', 'result_pending')",
+         SET lease_until = now() + interval '90 seconds'
+         WHERE
+             id = $1
+             AND node_id = $2
+             AND instance_id = $3
+             AND generation = $4
+             AND status IN (
+                 'running',
+                 'waiting',
+                 'result_pending'
+             )",
     )
     .bind(*id)
     .bind(actor.request.node_id)
@@ -295,10 +360,14 @@ async fn result(
         return Ok(reply(response));
     }
     let existing: Option<(Uuid, Value)> = sqlx::query_as(
-        "SELECT r.job_id, r.payload
-         FROM arbiter_results r JOIN arbiter_jobs j ON j.id=r.job_id
-         WHERE r.id=$1
-         AND j.node_id=$2",
+        "SELECT
+             r.job_id,
+             r.payload
+         FROM arbiter_results r
+         JOIN arbiter_jobs j ON j.id = r.job_id
+         WHERE
+             r.id = $1
+             AND j.node_id = $2",
     )
     .bind(input.id)
     .bind(actor.request.node_id)
@@ -312,10 +381,21 @@ async fn result(
         return finish(tx, &actor, json!({"recorded":true})).await;
     }
     let row: Row = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
+        "SELECT
+             id,
+             node_id,
+             input,
+             status,
+             generation,
+             instance_id,
+             response,
+             output,
+             cancel_requested,
+             interactive
          FROM arbiter_jobs
-         WHERE id=$1
-         AND node_id=$2
+         WHERE
+             id = $1
+             AND node_id = $2
          FOR UPDATE",
     )
     .bind(*id)
@@ -337,7 +417,7 @@ async fn result(
     }
     if input.status != JobStatus::Interrupted {
         let current_lease: bool =
-            sqlx::query_scalar("SELECT lease_until > now() FROM arbiter_jobs WHERE id=$1")
+            sqlx::query_scalar("SELECT lease_until > now() FROM arbiter_jobs WHERE id = $1")
                 .bind(*id)
                 .fetch_one(&mut *tx)
                 .await?;
@@ -345,13 +425,13 @@ async fn result(
             return Err(ApiError::Conflict("Job lease has expired"));
         }
     }
-    sqlx::query("INSERT INTO arbiter_results(id,job_id,payload) VALUES($1,$2,$3)")
+    sqlx::query("INSERT INTO arbiter_results(id, job_id, payload) VALUES($1, $2, $3)")
         .bind(input.id)
         .bind(*id)
         .bind(payload)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("UPDATE arbiter_jobs SET status='result_pending' WHERE id=$1")
+    sqlx::query("UPDATE arbiter_jobs SET status = 'result_pending' WHERE id = $1")
         .bind(*id)
         .execute(&mut *tx)
         .await?;

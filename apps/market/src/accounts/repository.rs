@@ -4,20 +4,23 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 pub async fn get(pool: &PgPool, id: Uuid) -> Result<Account> {
-    sqlx::query_as(
-        "SELECT id AS address, name, username
-         FROM accounts
-         WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or(ApiError::NotFound)
+    sqlx::query_as("SELECT id AS address, name, username FROM accounts WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or(ApiError::NotFound)
 }
 
 pub async fn profile(pool: &PgPool, id: Uuid) -> Result<Profile> {
     sqlx::query_as(
-        "SELECT id AS address, name, username, email, is_demo FROM accounts WHERE id = $1",
+        "SELECT
+             id AS address,
+             name,
+             username,
+             email,
+             is_demo
+         FROM accounts
+         WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -43,9 +46,22 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, input: UpdateProfile) -> Re
     }
 
     let updated = sqlx::query_as::<_, Profile>(
-        "UPDATE accounts SET name = $2, username = $3
-         WHERE id = $1 AND (username IS NULL OR username = $3)
-         RETURNING id AS address, name, username, email, is_demo",
+        "UPDATE accounts
+         SET
+             name = $2,
+             username = $3
+         WHERE
+             id = $1
+             AND (
+                 username IS NULL
+                 OR username = $3
+             )
+         RETURNING
+             id AS address,
+             name,
+             username,
+             email,
+             is_demo",
     )
     .bind(id)
     .bind(name)
@@ -58,12 +74,10 @@ pub async fn update_profile(pool: &PgPool, id: Uuid, input: UpdateProfile) -> Re
 }
 
 pub async fn exists(connection: &mut PgConnection, id: Uuid) -> Result<bool> {
-    Ok(sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1
-         FROM accounts
-         WHERE id = $1)",
+    Ok(
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)")
+            .bind(id)
+            .fetch_one(connection)
+            .await?,
     )
-    .bind(id)
-    .fetch_one(connection)
-    .await?)
 }

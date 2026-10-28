@@ -27,8 +27,10 @@ pub fn configure(config: &mut web::ServiceConfig) {
 async fn status(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
     let chains = state.chains.as_ref().ok_or(ApiError::NotFound)?;
     let actors: Vec<Value> = sqlx::query_scalar(
-        "SELECT json_build_object('account_id',d.account_id,'alias',d.alias,'name',a.name) FROM
-         demo_accounts d JOIN accounts a ON a.id=d.account_id ORDER BY d.alias",
+        "SELECT json_build_object('account_id', d.account_id, 'alias', d.alias, 'name', a.name)
+         FROM demo_accounts d
+         JOIN accounts a ON a.id = d.account_id
+         ORDER BY d.alias",
     )
     .fetch_all(&state.pool)
     .await?;
@@ -42,7 +44,13 @@ async fn status(state: web::Data<AppState>, request: HttpRequest) -> Result<Http
             .balance(actor.zcash_account.ok_or(ApiError::Unavailable)?)
             .await;
         let signing_ready: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM custody_keys WHERE account_id=$1 AND he_status='ready')",
+            "SELECT EXISTS(
+                 SELECT 1
+                 FROM custody_keys
+                 WHERE
+                     account_id = $1
+                     AND he_status = 'ready'
+             )",
         )
         .bind(account.0)
         .fetch_one(&state.pool)

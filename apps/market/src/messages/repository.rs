@@ -34,7 +34,7 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
     }
     let mut tx = state.pool.begin().await?;
     let enabled: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM arbiter_nodes WHERE id=$1 AND enabled)")
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM arbiter_nodes WHERE id = $1 AND enabled)")
             .bind(input.node_id)
             .fetch_one(&mut *tx)
             .await?;
@@ -42,7 +42,8 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
         return Err(ApiError::BadRequest("Select a registered arbiter node"));
     }
     sqlx::query(
-        "INSERT INTO approval_sessions(id,title,node_id,comparison,width) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO approval_sessions (id, title, node_id, comparison, width)
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(input.id)
     .bind(input.title)
@@ -57,10 +58,11 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
     .execute(&mut *tx)
     .await?;
     for (index, participant) in input.participants.iter().enumerate() {
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1)")
-            .bind(participant.account_id)
-            .fetch_one(&mut *tx)
-            .await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)")
+                .bind(participant.account_id)
+                .fetch_one(&mut *tx)
+                .await?;
         if !exists {
             return Err(ApiError::BadRequest("Session participant does not exist"));
         }
@@ -71,8 +73,8 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
             &participant.value.to_le_bytes(),
         )?;
         sqlx::query(
-            "INSERT INTO approval_members(session_id, account_id, position, input_sealed)
-             VALUES($1,$2,$3,$4)",
+            "INSERT INTO approval_members (session_id, account_id, position, input_sealed)
+             VALUES ($1, $2, $3, $4)",
         )
         .bind(input.id)
         .bind(participant.account_id)
@@ -88,7 +90,7 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
 
 pub async fn lock_session(connection: &mut PgConnection, session: Uuid) -> Result<()> {
     let auction: Option<Uuid> =
-        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id = $1")
             .bind(session)
             .fetch_optional(&mut *connection)
             .await?
@@ -96,7 +98,7 @@ pub async fn lock_session(connection: &mut PgConnection, session: Uuid) -> Resul
     if let Some(auction) = auction {
         crate::auctions::lock(connection, auction).await?;
     }
-    sqlx::query("SELECT id FROM approval_sessions WHERE id=$1 FOR UPDATE")
+    sqlx::query("SELECT id FROM approval_sessions WHERE id = $1 FOR UPDATE")
         .bind(session)
         .fetch_optional(connection)
         .await?
@@ -131,27 +133,62 @@ struct MessageRow {
 pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     let now = clock::now_ms()?;
     let rows: Vec<MessageRow> = sqlx::query_as(
-        "SELECT a.id, a.session_id, s.title AS session_title, s.auction_id,
-         x.asset_snapshot->>'name' AS auction_title,
-         (extract(epoch from a.created_at)*1000)::bigint AS created_at_ms,
-         (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw, a.request_id, a.revision,
-         a.kind, a.status, COALESCE(p.status,m.status) AS participant_status, s.status AS session_status,
-         COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
-         COALESCE(p.chargeable,m.chargeable) AS chargeable,
-         COALESCE(x.last_tick_ms,s.last_tick_ms) AS last_tick_ms, COALESCE(r.healthy AND
-         r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
-         n.enabled AND n.heartbeat_until>now(), FALSE) AS clock_healthy, a.approval,
-         COALESCE(c.precomputed,FALSE) AS precomputed,
-         x.closes_at_ms-3600000 AS closes_at_ms FROM
-         approval_messages a JOIN approval_sessions s ON s.id=a.session_id JOIN
-         approval_members m ON m.session_id=s.id AND m.account_id=a.account_id JOIN
-         arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
-         LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
-         ON p.auction_id=x.id AND p.account_id=a.account_id
-         LEFT JOIN auction_checks c ON c.session_id=s.id
-         WHERE a.account_id=$1 AND a.status<>'blocked'
-         ORDER BY CASE WHEN a.status='ready' THEN 0 ELSE 1 END,
-         a.created_at DESC, a.id LIMIT 100",
+        "SELECT
+             a.id,
+             a.session_id,
+             s.title AS session_title,
+             s.auction_id,
+             x.asset_snapshot ->> 'name' AS auction_title,
+             (extract(
+                 epoch
+                 from a.created_at
+             ) * 1000)::bigint AS created_at_ms,
+             (
+                 x.id IS NULL
+                 OR x.seller_id <> $1
+             ) AS can_withdraw,
+             a.request_id,
+             a.revision,
+             a.kind,
+             a.status,
+             COALESCE(p.status, m.status) AS participant_status,
+             s.status AS session_status,
+             COALESCE(p.remaining_ms, m.remaining_ms) AS remaining_ms,
+             COALESCE(p.chargeable, m.chargeable) AS chargeable,
+             COALESCE(x.last_tick_ms, s.last_tick_ms) AS last_tick_ms,
+             COALESCE(
+                 r.healthy
+                 AND r.instance_id = COALESCE(x.clock_epoch, s.clock_epoch)
+                 AND $2 - r.last_tick_ms BETWEEN 0 AND 5000
+                 AND n.enabled
+                 AND n.heartbeat_until > now(), FALSE
+             ) AS clock_healthy,
+             a.approval,
+             COALESCE(c.precomputed, FALSE) AS precomputed,
+             x.closes_at_ms - 3600000 AS closes_at_ms
+         FROM approval_messages a
+         JOIN approval_sessions s ON s.id = a.session_id
+         JOIN approval_members m
+             ON m.session_id = s.id
+                 AND m.account_id = a.account_id
+         JOIN arbiter_nodes n ON n.id = s.node_id
+         LEFT JOIN approval_runtime r ON r.singleton
+         LEFT JOIN auctions x ON x.id = s.auction_id
+         LEFT JOIN auction_participants p
+             ON p.auction_id = x.id
+                 AND p.account_id = a.account_id
+         LEFT JOIN auction_checks c ON c.session_id = s.id
+         WHERE
+             a.account_id = $1
+             AND a.status <> 'blocked'
+         ORDER BY
+             CASE
+                 WHEN a.status = 'ready' THEN 0
+                 ELSE 1
+             END,
+             a.created_at DESC,
+             a.id
+         LIMIT 100",
     )
     .bind(account)
     .bind(now)
@@ -207,28 +244,62 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     }
     let revision = revision(&state.pool, account).await?;
     let pending: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM approval_messages a JOIN approval_sessions s ON
-         s.id=a.session_id JOIN approval_members m ON m.session_id=s.id AND
-         m.account_id=a.account_id WHERE a.account_id=$1 AND a.status='ready' AND
-         s.status='active' AND m.status='active'",
+        "SELECT count(*)
+         FROM approval_messages a
+         JOIN approval_sessions s ON s.id = a.session_id
+         JOIN approval_members m
+             ON m.session_id = s.id
+                 AND m.account_id = a.account_id
+         WHERE
+             a.account_id = $1
+             AND a.status = 'ready'
+             AND s.status = 'active'
+             AND m.status = 'active'",
     )
     .bind(account)
     .fetch_one(&state.pool)
     .await?;
     let sessions: Vec<SessionSummary> = sqlx::query_as(
-        "SELECT s.id, s.title, s.auction_id, x.asset_snapshot->>'name' AS auction_title,
-         (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
-         s.status, COALESCE(p.status,m.status) AS participation_status,
-         COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
-         (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms-3600000<=$2) AND COALESCE(r.healthy AND
-         r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
-         n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running,
-         CASE WHEN x.status='open' THEN x.closes_at_ms-3600000 END AS waiting_until_ms FROM
-         approval_sessions s JOIN approval_members m ON m.session_id=s.id JOIN
-         arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
-         LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
-         ON p.auction_id=x.id AND p.account_id=m.account_id
-         WHERE m.account_id=$1 ORDER BY s.created_at DESC LIMIT 100",
+        "SELECT
+             s.id,
+             s.title,
+             s.auction_id,
+             x.asset_snapshot ->> 'name' AS auction_title,
+             (
+                 x.id IS NULL
+                 OR x.seller_id <> $1
+             ) AS can_withdraw,
+             s.status,
+             COALESCE(p.status, m.status) AS participation_status,
+             COALESCE(p.remaining_ms, m.remaining_ms) AS remaining_ms,
+             (
+                 COALESCE(p.chargeable, m.chargeable)
+                 AND (
+                     x.id IS NULL
+                     OR x.closes_at_ms - 3600000 <= $2
+                 )
+                 AND COALESCE(
+                     r.healthy
+                     AND r.instance_id = COALESCE(x.clock_epoch, s.clock_epoch)
+                     AND $2 - r.last_tick_ms BETWEEN 0 AND 5000
+                     AND n.enabled
+                     AND n.heartbeat_until > now(), FALSE
+                 )
+             ) AS timer_running,
+             CASE
+                 WHEN x.status = 'open' THEN x.closes_at_ms - 3600000
+             END AS waiting_until_ms
+         FROM approval_sessions s
+         JOIN approval_members m ON m.session_id = s.id
+         JOIN arbiter_nodes n ON n.id = s.node_id
+         LEFT JOIN approval_runtime r ON r.singleton
+         LEFT JOIN auctions x ON x.id = s.auction_id
+         LEFT JOIN auction_participants p
+             ON p.auction_id = x.id
+                 AND p.account_id = m.account_id
+         WHERE m.account_id = $1
+         ORDER BY s.created_at DESC
+         LIMIT 100",
     )
     .bind(account)
     .bind(now)
@@ -236,10 +307,25 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     .await?;
     let sales = crate::auctions::pending_sales(state, account).await?;
     let outcomes = sqlx::query_as::<_, AuctionOutcome>(
-        "SELECT a.id AS auction_id, a.asset_snapshot->>'name' AS title, a.status, a.custody_status, a.reason
-         FROM auctions a JOIN auction_participants p ON p.auction_id=a.id
-         WHERE p.account_id=$1 AND a.status IN ('completed','no_sale','interrupted')
-         ORDER BY a.finished_at_ms DESC NULLS LAST, a.id DESC LIMIT 20",
+        "SELECT
+             a.id AS auction_id,
+             a.asset_snapshot ->> 'name' AS title,
+             a.status,
+             a.custody_status,
+             a.reason
+         FROM auctions a
+         JOIN auction_participants p ON p.auction_id = a.id
+         WHERE
+             p.account_id = $1
+             AND a.status IN (
+                 'completed',
+                 'no_sale',
+                 'interrupted'
+             )
+         ORDER BY
+             a.finished_at_ms DESC NULLS LAST,
+             a.id DESC
+         LIMIT 20",
     )
     .bind(account)
     .fetch_all(&state.pool)
@@ -268,15 +354,34 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
 
 pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
     let messages: i64 = sqlx::query_scalar(
-        "SELECT greatest(COALESCE((SELECT max(a.revision) FROM approval_messages a WHERE
-         a.account_id=$1), 0), COALESCE((SELECT max(s.revision) FROM approval_sessions s
-         JOIN approval_members m ON m.session_id=s.id WHERE m.account_id=$1), 0))",
+        "SELECT greatest(COALESCE(
+             (
+                 SELECT max(a.revision)
+                 FROM approval_messages a
+                 WHERE a.account_id = $1
+             ), 0
+         ), COALESCE(
+             (
+                 SELECT max(s.revision)
+                 FROM approval_sessions s
+                 JOIN approval_members m ON m.session_id = s.id
+                 WHERE m.account_id = $1
+             ), 0
+         ))",
     )
     .bind(account)
     .fetch_one(pool)
     .await?;
-    let native:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0) FROM chain_operations WHERE account_id=$1 OR recipient_id=$1")
-        .bind(account).fetch_one(pool).await?;
+    let native: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(max(revision), 0)
+         FROM chain_operations
+         WHERE
+             account_id = $1
+             OR recipient_id = $1",
+    )
+    .bind(account)
+    .fetch_one(pool)
+    .await?;
     Ok(messages
         .max(crate::auctions::revision(pool, account).await?)
         .max(native))
@@ -285,7 +390,11 @@ pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
 pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) -> Result<Value> {
     let mut tx = state.pool.begin().await?;
     let session: Uuid = sqlx::query_scalar(
-        "SELECT session_id FROM approval_messages WHERE id=$1 AND account_id=$2",
+        "SELECT session_id
+         FROM approval_messages
+         WHERE
+             id = $1
+             AND account_id = $2",
     )
     .bind(id)
     .bind(account)
@@ -300,8 +409,15 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
         Value,
         Option<Value>,
     ) = sqlx::query_as(
-        "SELECT request_id, revision, status, request_ref, approval FROM
-         approval_messages WHERE id=$1 FOR UPDATE",
+        "SELECT
+             request_id,
+             revision,
+             status,
+             request_ref,
+             approval
+         FROM approval_messages
+         WHERE id = $1
+         FOR UPDATE",
     )
     .bind(id)
     .fetch_one(&mut *tx)
@@ -322,7 +438,7 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
             "This message is no longer available for approval",
         ));
     }
-    let kind: String = sqlx::query_scalar("SELECT kind FROM approval_messages WHERE id=$1")
+    let kind: String = sqlx::query_scalar("SELECT kind FROM approval_messages WHERE id = $1")
         .bind(id)
         .fetch_one(&mut *tx)
         .await?;
@@ -334,11 +450,18 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
     let now = clock::now_ms()?;
     clock::meter(&mut tx, session, now).await?;
     let (remaining, member, session_status): (i64, String, String) = sqlx::query_as(
-        "SELECT COALESCE(p.remaining_ms,m.remaining_ms), COALESCE(p.status,m.status), s.status
-         FROM approval_members m JOIN approval_sessions s ON s.id=m.session_id
-         LEFT JOIN auction_participants p ON p.auction_id=s.auction_id AND p.account_id=m.account_id
-         WHERE m.session_id=$1 AND
-         m.account_id=$2",
+        "SELECT
+             COALESCE(p.remaining_ms, m.remaining_ms),
+             COALESCE(p.status, m.status),
+             s.status
+         FROM approval_members m
+         JOIN approval_sessions s ON s.id = m.session_id
+         LEFT JOIN auction_participants p
+             ON p.auction_id = s.auction_id
+                 AND p.account_id = m.account_id
+         WHERE
+             m.session_id = $1
+             AND m.account_id = $2",
     )
     .bind(session)
     .bind(account)
@@ -376,8 +499,12 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
     )
     .await?;
     sqlx::query(
-        "UPDATE approval_messages SET status='approved', approval=$2,
-         revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE approval_messages
+         SET
+             status = 'approved',
+             approval = $2,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(id)
     .bind(&receipt)
@@ -396,7 +523,7 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
 
 pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<Value> {
     let auction: Option<Uuid> =
-        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id = $1")
             .bind(session)
             .fetch_optional(&state.pool)
             .await?
@@ -407,8 +534,14 @@ pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<
     let mut tx = state.pool.begin().await?;
     lock_session(&mut tx, session).await?;
     let (status, receipt): (String, Option<Value>) = sqlx::query_as(
-        "SELECT status, exit_receipt FROM approval_members
-         WHERE session_id=$1 AND account_id=$2 FOR UPDATE",
+        "SELECT
+             status,
+             exit_receipt
+         FROM approval_members
+         WHERE
+             session_id = $1
+             AND account_id = $2
+         FOR UPDATE",
     )
     .bind(session)
     .bind(account)
@@ -422,7 +555,7 @@ pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<
         return Err(ApiError::Conflict("Participation is no longer active"));
     }
     let session_status: String =
-        sqlx::query_scalar("SELECT status FROM approval_sessions WHERE id=$1")
+        sqlx::query_scalar("SELECT status FROM approval_sessions WHERE id = $1")
             .bind(session)
             .fetch_one(&mut *tx)
             .await?;
@@ -432,7 +565,11 @@ pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<
     let now = clock::now_ms()?;
     clock::meter(&mut tx, session, now).await?;
     let remaining: i64 = sqlx::query_scalar(
-        "SELECT remaining_ms FROM approval_members WHERE session_id=$1 AND account_id=$2",
+        "SELECT remaining_ms
+         FROM approval_members
+         WHERE
+             session_id = $1
+             AND account_id = $2",
     )
     .bind(session)
     .bind(account)
@@ -467,7 +604,11 @@ pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<
     .await?;
     clock::terminate(&mut tx, session, account, "withdrawn").await?;
     sqlx::query(
-        "UPDATE approval_members SET exit_receipt=$3 WHERE session_id=$1 AND account_id=$2",
+        "UPDATE approval_members
+         SET exit_receipt = $3
+         WHERE
+             session_id = $1
+             AND account_id = $2",
     )
     .bind(session)
     .bind(account)
@@ -489,8 +630,10 @@ pub(crate) async fn create_bound_check(
     check: super::model::BoundCheck,
 ) -> Result<()> {
     sqlx::query(
-        "INSERT INTO approval_sessions(id,title,node_id,comparison,width,auction_id,round_generation,scope_hash)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+        "INSERT INTO approval_sessions (
+             id, title, node_id, comparison, width, auction_id, round_generation, scope_hash
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
     )
     .bind(check.id)
     .bind(check.title)
@@ -509,8 +652,8 @@ pub(crate) async fn create_bound_check(
     .await?;
     for (position, input) in check.inputs.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO approval_members(session_id,account_id,position,input_ref)
-            VALUES($1,$2,$3,$4)",
+            "INSERT INTO approval_members (session_id, account_id, position, input_ref)
+             VALUES ($1, $2, $3, $4)",
         )
         .bind(check.id)
         .bind(input.owner)

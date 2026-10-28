@@ -69,7 +69,7 @@ pub async fn serve(config: Config) -> Result<()> {
 pub async fn serve_until(config: Config, stop_rx: watch::Receiver<bool>) -> Result<()> {
     let repository = Repository::connect(&config).await?;
     let mut ownership = repository.pool.acquire().await?;
-    let locked: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(hashtextextended($1,0))")
+    let locked: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(hashtextextended($1, 0))")
         .bind(config.node_id.to_string())
         .fetch_one(&mut *ownership)
         .await?;

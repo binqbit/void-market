@@ -39,12 +39,20 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
     }
 
     // The exclusive worker lock fences the previous process before lease recovery.
-    sqlx::query("UPDATE custody_keys SET lease_until=now() WHERE he_status='building'")
-        .execute(&state.pool)
-        .await?;
-    sqlx::query("UPDATE approval_messages SET lease_until=now() WHERE status='processing'")
-        .execute(&state.pool)
-        .await?;
+    sqlx::query(
+        "UPDATE custody_keys
+         SET lease_until = now()
+         WHERE he_status = 'building'",
+    )
+    .execute(&state.pool)
+    .await?;
+    sqlx::query(
+        "UPDATE approval_messages
+         SET lease_until = now()
+         WHERE status = 'processing'",
+    )
+    .execute(&state.pool)
+    .await?;
 
     let (clock_stop, clock_signal) = watch::channel(false);
     let clock_failed = Arc::new(AtomicBool::new(false));
@@ -109,10 +117,21 @@ struct SessionPreparation {
 
 async fn prepare_session(state: &AppState) -> Result<bool> {
     let interrupted = sqlx::query(
-        "UPDATE approval_sessions s SET status='interrupted',
-         revision=nextval('message_revision') WHERE s.status='initializing'
-         AND EXISTS (SELECT 1 FROM approval_members m JOIN custody_keys k
-         ON k.account_id=m.account_id WHERE m.session_id=s.id AND k.he_status='failed')",
+        "UPDATE approval_sessions s
+         SET
+             status = 'interrupted',
+             revision = nextval('message_revision')
+         WHERE
+             s.status = 'initializing'
+             AND EXISTS
+             (
+                 SELECT 1
+                 FROM approval_members m
+                 JOIN custody_keys k ON k.account_id = m.account_id
+                 WHERE
+                     m.session_id = s.id
+                     AND k.he_status = 'failed'
+             )",
     )
     .execute(&state.pool)
     .await?;
@@ -121,13 +140,31 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
     }
 
     let row: Option<SessionPreparation> = sqlx::query_as(
-        "SELECT s.id, s.node_id, s.comparison, s.width, s.scope_hash,
-         CASE WHEN c.precomputed THEN a.closes_at_ms-3600000 END AS release_at_ms
-         FROM approval_sessions s LEFT JOIN auction_checks c ON c.session_id=s.id
-         LEFT JOIN auctions a ON a.id=s.auction_id WHERE
-         s.status='initializing' AND NOT EXISTS(SELECT 1 FROM approval_members m JOIN
-         custody_keys k ON k.account_id=m.account_id WHERE m.session_id=s.id AND
-         k.he_status<>'ready') ORDER BY s.created_at LIMIT 1",
+        "SELECT
+             s.id,
+             s.node_id,
+             s.comparison,
+             s.width,
+             s.scope_hash,
+             CASE
+                 WHEN c.precomputed THEN a.closes_at_ms - 3600000
+             END AS release_at_ms
+         FROM approval_sessions s
+         LEFT JOIN auction_checks c ON c.session_id = s.id
+         LEFT JOIN auctions a ON a.id = s.auction_id
+         WHERE
+             s.status = 'initializing'
+             AND NOT EXISTS
+             (
+                 SELECT 1
+                 FROM approval_members m
+                 JOIN custody_keys k ON k.account_id = m.account_id
+                 WHERE
+                     m.session_id = s.id
+                     AND k.he_status <> 'ready'
+             )
+         ORDER BY s.created_at
+         LIMIT 1",
     )
     .fetch_optional(&state.pool)
     .await?;
@@ -137,8 +174,13 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
     let session = preparation.id;
     let node = preparation.node_id;
     let members: Vec<InputRecord> = sqlx::query_as(
-        "SELECT account_id, input_sealed, input_ref FROM approval_members
-         WHERE session_id=$1 ORDER BY position",
+        "SELECT
+             account_id,
+             input_sealed,
+             input_ref
+         FROM approval_members
+         WHERE session_id = $1
+         ORDER BY position",
     )
     .bind(session)
     .fetch_all(&state.pool)
@@ -159,7 +201,7 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
     let mut tx = state.pool.begin().await?;
     repository::lock_session(&mut tx, session).await?;
     let active: bool =
-        sqlx::query_scalar("SELECT status='initializing' FROM approval_sessions WHERE id=$1")
+        sqlx::query_scalar("SELECT status = 'initializing' FROM approval_sessions WHERE id = $1")
             .bind(session)
             .fetch_one(&mut *tx)
             .await?;
@@ -175,13 +217,17 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
         },
     )
     .await?;
-    sqlx::query("UPDATE arbiter_jobs SET interactive=TRUE WHERE id=$1")
+    sqlx::query("UPDATE arbiter_jobs SET interactive = TRUE WHERE id = $1")
         .bind(session)
         .execute(&mut *tx)
         .await?;
     sqlx::query(
-        "UPDATE approval_sessions SET status='active', job_id=$1,
-         revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE approval_sessions
+         SET
+             status = 'active',
+             job_id = $1,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(session)
     .execute(&mut *tx)
@@ -305,14 +351,43 @@ struct Claimed {
 async fn process_one(state: &AppState) -> Result<bool> {
     let lease = Uuid::new_v4();
     let row: Option<Claimed> = sqlx::query_as(
-        "UPDATE approval_messages SET status='processing', lease_id=$1,
-         lease_until=now()+interval '10 minutes', revision=nextval('message_revision')
-         WHERE id=(SELECT a.id FROM approval_messages a JOIN approval_sessions s ON
-         s.id=a.session_id JOIN approval_members m ON m.session_id=s.id AND
-         m.account_id=a.account_id WHERE s.status='active' AND m.status='active' AND
-         (a.status='queued' OR (a.status='processing' AND a.lease_until<now())) ORDER BY
-         a.created_at LIMIT 1 FOR UPDATE OF a SKIP LOCKED) RETURNING id, session_id,
-         account_id, request_id, request_ref, generation, kind, approval",
+        "UPDATE approval_messages
+         SET
+             status = 'processing',
+             lease_id = $1,
+             lease_until = now() + interval '10 minutes',
+             revision = nextval('message_revision')
+         WHERE
+             id = (
+                 SELECT a.id
+                 FROM approval_messages a
+                 JOIN approval_sessions s ON s.id = a.session_id
+                 JOIN approval_members m
+                     ON m.session_id = s.id
+                         AND m.account_id = a.account_id
+                 WHERE
+                     s.status = 'active'
+                     AND m.status = 'active'
+                     AND (
+                         a.status = 'queued'
+                         OR (
+                             a.status = 'processing'
+                             AND a.lease_until < now()
+                         )
+                     )
+                 ORDER BY a.created_at
+                 LIMIT 1
+                 FOR UPDATE OF a SKIP LOCKED
+             )
+         RETURNING
+             id,
+             session_id,
+             account_id,
+             request_id,
+             request_ref,
+             generation,
+             kind,
+             approval",
     )
     .bind(lease)
     .fetch_optional(&state.pool)
@@ -326,10 +401,18 @@ async fn process_one(state: &AppState) -> Result<bool> {
     match result {
         Ok(output) => {
             let changed = sqlx::query(
-                "UPDATE approval_messages SET status='response_pending', response_ref=$3,
-                 private_state=$4, lease_id=NULL, lease_until=NULL,
-                 revision=nextval('message_revision') WHERE id=$1 AND lease_id=$2 AND
-                 status='processing'",
+                "UPDATE approval_messages
+                 SET
+                     status = 'response_pending',
+                     response_ref = $3,
+                     private_state = $4,
+                     lease_id = NULL,
+                     lease_until = NULL,
+                     revision = nextval('message_revision')
+                 WHERE
+                     id = $1
+                     AND lease_id = $2
+                     AND status = 'processing'",
             )
             .bind(row.id)
             .bind(lease)
@@ -371,7 +454,7 @@ async fn execute(state: &AppState, row: &Claimed) -> Result<operations::Output> 
         .record(&reference)
         .map_err(|_| ApiError::Unavailable)?;
     let context: Value =
-        sqlx::query_scalar("SELECT check_context FROM approval_sessions WHERE id=$1")
+        sqlx::query_scalar("SELECT check_context FROM approval_sessions WHERE id = $1")
             .bind(row.session_id)
             .fetch_one(&state.pool)
             .await?;
@@ -396,7 +479,7 @@ async fn execute(state: &AppState, row: &Claimed) -> Result<operations::Output> 
         },
     )?;
     let registered: String =
-        sqlx::query_scalar("SELECT signing_public_key FROM custody_keys WHERE account_id=$1")
+        sqlx::query_scalar("SELECT signing_public_key FROM custody_keys WHERE account_id = $1")
             .bind(row.account_id)
             .fetch_one(&state.pool)
             .await?;
@@ -413,9 +496,18 @@ async fn execute(state: &AppState, row: &Claimed) -> Result<operations::Output> 
     };
     let prior = if let Some(kind) = previous {
         sqlx::query_as::<_, (Uuid, Vec<u8>)>(
-            "SELECT id, private_state FROM approval_messages WHERE session_id=$1 AND
-             account_id=$2 AND generation=$3 AND kind=$4 AND private_state IS NOT NULL ORDER
-             BY created_at DESC LIMIT 1",
+            "SELECT
+                 id,
+                 private_state
+             FROM approval_messages
+             WHERE
+                 session_id = $1
+                 AND account_id = $2
+                 AND generation = $3
+                 AND kind = $4
+                 AND private_state IS NOT NULL
+             ORDER BY created_at DESC
+             LIMIT 1",
         )
         .bind(row.session_id)
         .bind(row.account_id)

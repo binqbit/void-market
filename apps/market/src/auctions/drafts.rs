@@ -34,7 +34,7 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
         .to_vec();
     let mut tx = state.pool.begin().await?;
     let asset = assets::repository::lock(&mut tx, input.asset_id).await?;
-    let existing: Option<AuctionRow> = sqlx::query_as("SELECT * FROM auctions WHERE id=$1")
+    let existing: Option<AuctionRow> = sqlx::query_as("SELECT * FROM auctions WHERE id = $1")
         .bind(input.request_id)
         .fetch_optional(&mut *tx)
         .await?;
@@ -74,8 +74,18 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
     let snapshot = json!({"id":asset.id,"name":asset.name,
         "description":asset.description,"image":asset.image,"nft":asset.nft});
     sqlx::query(
-        "INSERT INTO auctions(id,asset_id,seller_id,closes_at_ms,asset_snapshot,
-         creation_hash,created_at_ms,buyer_limit,execution) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        "INSERT INTO auctions (
+             id,
+             asset_id,
+             seller_id,
+             closes_at_ms,
+             asset_snapshot,
+             creation_hash,
+             created_at_ms,
+             buyer_limit,
+             execution
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(input.request_id)
     .bind(input.asset_id)
@@ -89,8 +99,8 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "INSERT INTO auction_participants(auction_id,account_id,id,input_sealed,created_at_ms)
-         VALUES($1,$2,$1,$3,$4)",
+        "INSERT INTO auction_participants (auction_id, account_id, id, input_sealed, created_at_ms)
+         VALUES ($1, $2, $1, $3, $4)",
     )
     .bind(input.request_id)
     .bind(seller)
@@ -114,7 +124,11 @@ pub async fn edit(state: &AppState, seller: Uuid, id: Uuid, input: EditAuction) 
     }
     closing_time(messages::now_ms()?, input.closes_at_ms)?;
     sqlx::query(
-        "UPDATE auction_participants SET input_sealed=$2 WHERE auction_id=$1 AND account_id=$3",
+        "UPDATE auction_participants
+         SET input_sealed = $2
+         WHERE
+             auction_id = $1
+             AND account_id = $3",
     )
     .bind(id)
     .bind(inputs::seal(state, id, seller, reserve)?)
@@ -122,7 +136,11 @@ pub async fn edit(state: &AppState, seller: Uuid, id: Uuid, input: EditAuction) 
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "UPDATE auctions SET closes_at_ms=$2,revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             closes_at_ms = $2,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(id)
     .bind(input.closes_at_ms)
@@ -143,8 +161,12 @@ pub async fn cancel(state: &AppState, seller: Uuid, id: Uuid) -> Result<()> {
     }
     owner_draft(&auction, seller)?;
     sqlx::query(
-        "UPDATE auctions SET status='cancelled',finished_at_ms=$2,
-        revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = 'cancelled',
+             finished_at_ms = $2,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(id)
     .bind(messages::now_ms()?)
@@ -231,9 +253,29 @@ pub async fn publish(
     let now = messages::now_ms()?;
     closing_time(now, auction.closes_at_ms)?;
     let node: Option<Uuid> = sqlx::query_scalar(
-        "SELECT n.id FROM arbiter_nodes n WHERE n.enabled AND n.heartbeat_until>now() AND ($1=FALSE OR n.ethereum_address IS NOT NULL)
-         ORDER BY (SELECT count(*) FROM auctions a WHERE a.node_id=n.id
-         AND a.status IN ('open','matching','awaiting_completion')),n.id LIMIT 1 FOR UPDATE OF n",
+        "SELECT n.id
+         FROM arbiter_nodes n
+         WHERE
+             n.enabled
+             AND n.heartbeat_until > now()
+             AND (
+                 $1 = FALSE
+                 OR n.ethereum_address IS NOT NULL
+             )
+         ORDER BY
+             (
+                 SELECT count(*)
+                 FROM auctions a
+                 WHERE
+                     a.node_id = n.id
+                     AND a.status IN (
+                         'open',
+                         'matching',
+                         'awaiting_completion'
+                     )
+             ), n.id
+         LIMIT 1
+         FOR UPDATE OF n",
     )
     .bind(auction.execution == "localnet")
     .fetch_optional(&mut *tx)
@@ -243,7 +285,7 @@ pub async fn publish(
         "description":asset.description,"image":asset.image,"nft":asset.nft});
     let native_terms = if auction.execution == "localnet" {
         let address: Option<String> =
-            sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id=$1")
+            sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id = $1")
                 .bind(node)
                 .fetch_one(&mut *tx)
                 .await?;
@@ -299,7 +341,11 @@ pub async fn publish(
     )
     .await?;
     sqlx::query(
-        "UPDATE auction_participants SET frozen_input=$3 WHERE auction_id=$1 AND account_id=$2",
+        "UPDATE auction_participants
+         SET frozen_input = $3
+         WHERE
+             auction_id = $1
+             AND account_id = $2",
     )
     .bind(id)
     .bind(seller)
@@ -307,8 +353,17 @@ pub async fn publish(
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "UPDATE auctions SET status=$7,custody_status=$8,node_id=$2,asset_snapshot=$3,policy_hash=$4,
-         published_at_ms=$5,publish_receipt=$6,revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = $7,
+             custody_status = $8,
+             node_id = $2,
+             asset_snapshot = $3,
+             policy_hash = $4,
+             published_at_ms = $5,
+             publish_receipt = $6,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(id)
     .bind(node)
@@ -316,8 +371,16 @@ pub async fn publish(
     .bind(policy)
     .bind(now)
     .bind(&receipt)
-    .bind(if auction.execution == "localnet" { "deposit_pending" } else { "open" })
-    .bind(if auction.execution == "localnet" { "deposit_pending" } else { "none" })
+    .bind(if auction.execution == "localnet" {
+        "deposit_pending"
+    } else {
+        "open"
+    })
+    .bind(if auction.execution == "localnet" {
+        "deposit_pending"
+    } else {
+        "none"
+    })
     .execute(&mut *tx)
     .await?;
     if auction.execution == "localnet" {

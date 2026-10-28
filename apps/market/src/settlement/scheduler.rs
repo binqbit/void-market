@@ -12,8 +12,15 @@ use uuid::Uuid;
 
 pub(crate) async fn advance(state: &AppState) -> Result<()> {
     let ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM auctions WHERE execution='localnet' AND custody_status IN
-         ('deposit_pending','held') ORDER BY created_at_ms",
+        "SELECT id
+         FROM auctions
+         WHERE
+             execution = 'localnet'
+             AND custody_status IN (
+                 'deposit_pending',
+                 'held'
+             )
+         ORDER BY created_at_ms",
     )
     .fetch_all(&state.pool)
     .await?;
@@ -43,7 +50,11 @@ pub(crate) async fn advance(state: &AppState) -> Result<()> {
 
 async fn remaining(connection: &mut PgConnection, auction: Uuid, account: Uuid) -> Result<i64> {
     Ok(sqlx::query_scalar(
-        "SELECT remaining_ms FROM auction_participants WHERE auction_id=$1 AND account_id=$2",
+        "SELECT remaining_ms
+         FROM auction_participants
+         WHERE
+             auction_id = $1
+             AND account_id = $2",
     )
     .bind(auction)
     .bind(account)
@@ -66,8 +77,9 @@ async fn finish_paid_sale(
     });
     auction::deliver(state, connection, row, approval).await?;
     sqlx::query(
-        "UPDATE auctions SET settlement_note='Seller timeout applied the accepted delivery terms' WHERE
-         id=$1",
+        "UPDATE auctions
+         SET settlement_note = 'Seller timeout applied the accepted delivery terms'
+         WHERE id = $1",
     )
     .bind(row.id)
     .execute(connection)
@@ -82,8 +94,14 @@ async fn advance_payment(
 ) -> Result<()> {
     let winner = row.winner_id.ok_or(ApiError::Internal)?;
     let in_flight: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM chain_operations WHERE auction_id=$1 AND kind='payment' AND status IN
-         ('approved','building','signed','submitted','reconcile'))",
+        "SELECT EXISTS(
+             SELECT 1
+             FROM chain_operations
+             WHERE
+                 auction_id = $1
+                 AND kind = 'payment'
+                 AND status IN ('approved', 'building', 'signed', 'submitted', 'reconcile')
+         )",
     )
     .bind(row.id)
     .fetch_one(&mut *connection)
@@ -96,24 +114,44 @@ async fn advance_payment(
     }
 
     sqlx::query(
-        "UPDATE auction_participants SET status='disqualified',chargeable=FALSE WHERE auction_id=$1 AND
-         account_id=$2",
+        "UPDATE auction_participants
+         SET
+             status = 'disqualified',
+             chargeable = FALSE
+         WHERE
+             auction_id = $1
+             AND account_id = $2",
     )
     .bind(row.id)
     .bind(winner)
     .execute(&mut *connection)
     .await?;
     sqlx::query(
-        "UPDATE chain_operations SET status='cancelled',revision=nextval('message_revision') WHERE
-         auction_id=$1 AND kind='payment' AND status IN ('preparing','ready','failed')",
+        "UPDATE chain_operations
+         SET
+             status = 'cancelled',
+             revision = nextval('message_revision')
+         WHERE
+             auction_id = $1
+             AND kind = 'payment'
+             AND status IN (
+                 'preparing',
+                 'ready',
+                 'failed'
+             )",
     )
     .bind(row.id)
     .execute(&mut *connection)
     .await?;
     sqlx::query(
-        "UPDATE auctions SET status='interrupted',reason='buyer_payment_expired', settlement_note='Buyer
-         failed to complete payment in time; transfers are not automatically refunded',
-         finished_at_ms=$2,revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = 'interrupted',
+             reason = 'buyer_payment_expired',
+             settlement_note = 'Buyer\n         failed to complete payment in time; transfers are not automatically refunded',
+             finished_at_ms = $2,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(row.id)
     .bind(messages::now_ms()?)
@@ -128,8 +166,15 @@ async fn expire_deposit(
     row: &AuctionRow,
 ) -> Result<()> {
     let pending: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT id,status FROM chain_operations WHERE auction_id=$1 AND kind='deposit' ORDER BY
-         created_at_ms DESC LIMIT 1",
+        "SELECT
+             id,
+             status
+         FROM chain_operations
+         WHERE
+             auction_id = $1
+             AND kind = 'deposit'
+         ORDER BY created_at_ms DESC
+         LIMIT 1",
     )
     .bind(row.id)
     .fetch_optional(&mut *connection)
@@ -166,8 +211,14 @@ async fn expire_deposit(
     )
     .await?;
     sqlx::query(
-        "UPDATE auctions SET status='interrupted',custody_status=$2,reason='seller_deposit_expired',
-         finished_at_ms=$3,revision=nextval('message_revision') WHERE id=$1",
+        "UPDATE auctions
+         SET
+             status = 'interrupted',
+             custody_status = $2,
+             reason = 'seller_deposit_expired',
+             finished_at_ms = $3,
+             revision = nextval('message_revision')
+         WHERE id = $1",
     )
     .bind(row.id)
     .bind(custody)

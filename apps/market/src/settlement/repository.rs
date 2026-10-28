@@ -9,7 +9,7 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 pub(crate) async fn get(pool: &PgPool, id: Uuid) -> Result<Operation> {
-    sqlx::query_as("SELECT * FROM chain_operations WHERE id=$1")
+    sqlx::query_as("SELECT * FROM chain_operations WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await?
@@ -17,7 +17,7 @@ pub(crate) async fn get(pool: &PgPool, id: Uuid) -> Result<Operation> {
 }
 
 pub(crate) async fn lock(connection: &mut PgConnection, id: Uuid) -> Result<Operation> {
-    sqlx::query_as("SELECT * FROM chain_operations WHERE id=$1 FOR UPDATE")
+    sqlx::query_as("SELECT * FROM chain_operations WHERE id = $1 FOR UPDATE")
         .bind(id)
         .fetch_optional(connection)
         .await?
@@ -74,9 +74,19 @@ pub(crate) async fn insert(
 ) -> Result<()> {
     let now = messages::now_ms()?;
     sqlx::query(
-        "INSERT INTO
-         chain_operations(id,account_id,recipient_id,auction_id,asset_id,kind,payload_sealed,approval,created_at_ms,updated_at_ms)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)",
+        "INSERT INTO chain_operations (
+             id,
+             account_id,
+             recipient_id,
+             auction_id,
+             asset_id,
+             kind,
+             payload_sealed,
+             approval,
+             created_at_ms,
+             updated_at_ms
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)",
     )
     .bind(operation.id)
     .bind(operation.account)
@@ -84,10 +94,16 @@ pub(crate) async fn insert(
     .bind(operation.auction)
     .bind(operation.asset)
     .bind(operation.kind)
-    .bind(sealed(state,operation.account,operation.id,&operation.payload)?)
+    .bind(sealed(
+        state,
+        operation.account,
+        operation.id,
+        &operation.payload,
+    )?)
     .bind(operation.approval)
     .bind(now)
-    .execute(connection).await?;
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
@@ -98,13 +114,21 @@ pub(crate) async fn save_payload(
     payload: &Payload,
     status: &str,
 ) -> Result<()> {
-    sqlx::query("UPDATE chain_operations SET
-         payload_sealed=$2,status=$3,revision=nextval('message_revision'),updated_at_ms=$4 WHERE id=$1")
-        .bind(operation.id)
-        .bind(sealed(state,operation.account_id,operation.id,payload)?)
-        .bind(status)
-        .bind(messages::now_ms()?)
-        .execute(connection).await?;
+    sqlx::query(
+        "UPDATE chain_operations
+         SET
+             payload_sealed = $2,
+             status = $3,
+             revision = nextval('message_revision'),
+             updated_at_ms = $4
+         WHERE id = $1",
+    )
+    .bind(operation.id)
+    .bind(sealed(state, operation.account_id, operation.id, payload)?)
+    .bind(status)
+    .bind(messages::now_ms()?)
+    .execute(connection)
+    .await?;
     Ok(())
 }
 
@@ -115,8 +139,13 @@ pub(crate) async fn status(
     error: Option<&str>,
 ) -> Result<()> {
     sqlx::query(
-        "UPDATE chain_operations SET
-         status=$2,error=$3,revision=nextval('message_revision'),updated_at_ms=$4 WHERE id=$1",
+        "UPDATE chain_operations
+         SET
+             status = $2,
+             error = $3,
+             revision = nextval('message_revision'),
+             updated_at_ms = $4
+         WHERE id = $1",
     )
     .bind(id)
     .bind(status)

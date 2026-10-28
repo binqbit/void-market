@@ -176,8 +176,12 @@ async fn finish(
     let mut tx = state.pool.begin().await?;
     // A Google subject identifies the account. Matching email alone never links identities.
     let (account, username): (Uuid, Option<String>) = sqlx::query_as(
-        "INSERT INTO accounts(id, name, google_subject, email) VALUES($1, $2, $3, lower($4))
-         ON CONFLICT (google_subject) DO UPDATE SET email = EXCLUDED.email RETURNING id, username",
+        "INSERT INTO accounts (id, name, google_subject, email)
+         VALUES ($1, $2, $3, lower($4)) ON CONFLICT (google_subject) DO
+         UPDATE
+             SET email = EXCLUDED.email RETURNING
+             id,
+             username",
     )
     .bind(Uuid::new_v4())
     .bind("New member")

@@ -20,7 +20,7 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
     let mut ownership = state.pool.acquire().await?;
     ownership.close_on_drop();
     let owned: bool = sqlx::query_scalar(
-        "SELECT pg_try_advisory_lock(hashtextextended(current_schema(),732617232))",
+        "SELECT pg_try_advisory_lock(hashtextextended(current_schema(), 732617232))",
     )
     .fetch_one(&mut *ownership)
     .await?;
@@ -28,11 +28,19 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
         return Err(ApiError::Unavailable);
     }
     let instance = Uuid::new_v4();
-    sqlx::query("INSERT INTO localnet_runtime(singleton,instance_id,last_tick_ms,healthy) VALUES(TRUE,$1,$2,FALSE)
-         ON CONFLICT(singleton) DO UPDATE SET instance_id=$1,last_tick_ms=$2,healthy=FALSE")
-        .bind(instance)
-        .bind(messages::now_ms()?)
-        .execute(&state.pool).await?;
+    sqlx::query(
+        "INSERT INTO localnet_runtime (singleton, instance_id, last_tick_ms, healthy)
+         VALUES (TRUE, $1, $2, FALSE) ON CONFLICT (singleton) DO
+         UPDATE
+             SET
+                 instance_id = $1,
+                 last_tick_ms = $2,
+                 healthy = FALSE",
+    )
+    .bind(instance)
+    .bind(messages::now_ms()?)
+    .execute(&state.pool)
+    .await?;
     loop {
         if *stop.borrow() {
             break;
@@ -47,11 +55,20 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
                 .synchronized()
                 .await
                 .unwrap_or(false);
-        sqlx::query("UPDATE localnet_runtime SET last_tick_ms=$2,healthy=$3 WHERE singleton AND instance_id=$1")
-            .bind(instance)
-            .bind(messages::now_ms()?)
-            .bind(healthy)
-            .execute(&state.pool).await?;
+        sqlx::query(
+            "UPDATE localnet_runtime
+             SET
+                 last_tick_ms = $2,
+                 healthy = $3
+             WHERE
+                 singleton
+                 AND instance_id = $1",
+        )
+        .bind(instance)
+        .bind(messages::now_ms()?)
+        .bind(healthy)
+        .execute(&state.pool)
+        .await?;
         if healthy {
             super::scheduler::advance(&state).await?;
             if let Some(operation) = next(&state).await? {
@@ -59,9 +76,7 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
                 if let Err(error) = execution::step(&state, operation, instance).await {
                     match error {
                         ApiError::Unavailable => {
-                            sqlx::query(
-                                "UPDATE localnet_runtime SET healthy=FALSE WHERE instance_id=$1",
-                            )
+                            sqlx::query("UPDATE localnet_runtime SET healthy = FALSE WHERE instance_id = $1")
                             .bind(instance)
                             .execute(&state.pool)
                             .await?;
@@ -98,7 +113,7 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
             _=tokio::time::sleep(Duration::from_millis(250))=>{}
         }
     }
-    sqlx::query("UPDATE localnet_runtime SET healthy=FALSE WHERE instance_id=$1")
+    sqlx::query("UPDATE localnet_runtime SET healthy = FALSE WHERE instance_id = $1")
         .bind(instance)
         .execute(&state.pool)
         .await?;
@@ -108,10 +123,33 @@ pub async fn run(state: AppState, mut stop: watch::Receiver<bool>) -> Result<()>
 
 async fn next(state: &AppState) -> Result<Option<Operation>> {
     Ok(sqlx::query_as(
-        "SELECT o.* FROM chain_operations o WHERE o.status IN
-         ('preparing','approved','building','signed','submitted','reconcile') AND (o.status<>'preparing'
-         OR NOT EXISTS(SELECT 1 FROM chain_operations busy WHERE busy.account_id=o.account_id AND
-         busy.status='ready')) ORDER BY o.updated_at_ms,o.created_at_ms LIMIT 1",
+        "SELECT o.*
+         FROM chain_operations o
+         WHERE
+             o.status IN (
+                 'preparing',
+                 'approved',
+                 'building',
+                 'signed',
+                 'submitted',
+                 'reconcile'
+             )
+             AND (
+                 o.status <> 'preparing'
+                 OR NOT EXISTS
+                 (
+                     SELECT 1
+                     FROM chain_operations busy
+                     WHERE
+                         busy.account_id = o.account_id
+                         AND busy.status = 'ready'
+                 )
+             )
+         ORDER BY
+             o.updated_at_ms,
+             o.created_at_ms
+         LIMIT 1",
     )
-    .fetch_optional(&state.pool).await?)
+    .fetch_optional(&state.pool)
+    .await?)
 }

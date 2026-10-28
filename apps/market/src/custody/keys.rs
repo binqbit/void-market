@@ -22,7 +22,11 @@ pub struct OwnerKeys {
 
 pub async fn material(pool: &PgPool, account: Uuid) -> Result<KeyMaterial> {
     let value: serde_json::Value = sqlx::query_scalar(
-        "SELECT he_material FROM custody_keys WHERE account_id=$1 AND he_status='ready'",
+        "SELECT he_material
+         FROM custody_keys
+         WHERE
+             account_id = $1
+             AND he_status = 'ready'",
     )
     .bind(account)
     .fetch_optional(pool)
@@ -72,8 +76,16 @@ pub fn load(
 pub async fn generate_one(state: &AppState) -> Result<bool> {
     let custody = state.custody.as_ref().ok_or(ApiError::Unavailable)?.clone();
     let missing: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM accounts WHERE NOT EXISTS (SELECT 1 FROM custody_keys WHERE
-         account_id=accounts.id) LIMIT 20",
+        "SELECT id
+         FROM accounts
+         WHERE
+             NOT EXISTS
+             (
+                 SELECT 1
+                 FROM custody_keys
+                 WHERE account_id = accounts.id
+             )
+         LIMIT 20",
     )
     .fetch_all(&state.pool)
     .await?;
@@ -83,11 +95,26 @@ pub async fn generate_one(state: &AppState) -> Result<bool> {
     }
     let lease = Uuid::new_v4();
     let account: Option<Uuid> = sqlx::query_scalar(
-        "UPDATE custody_keys SET he_status='building', lease_id=$1,
-         lease_until=now()+interval '10 minutes' WHERE account_id=(SELECT account_id FROM
-         custody_keys WHERE he_status='queued' OR (he_status='building' AND
-         lease_until<now()) ORDER BY account_id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING
-         account_id",
+        "UPDATE custody_keys
+         SET
+             he_status = 'building',
+             lease_id = $1,
+             lease_until = now() + interval '10 minutes'
+         WHERE
+             account_id = (
+                 SELECT account_id
+                 FROM custody_keys
+                 WHERE
+                     he_status = 'queued'
+                     OR (
+                         he_status = 'building'
+                         AND lease_until < now()
+                     )
+                 ORDER BY account_id
+                 LIMIT 1
+                 FOR UPDATE SKIP LOCKED
+             )
+         RETURNING account_id",
     )
     .bind(lease)
     .fetch_optional(&state.pool)
@@ -99,8 +126,16 @@ pub async fn generate_one(state: &AppState) -> Result<bool> {
     match generated {
         Ok(Ok((material, secret))) => {
             sqlx::query(
-                "UPDATE custody_keys SET he_status='ready', he_material=$3, he_secret=$4,
-                 lease_id=NULL, lease_until=NULL WHERE account_id=$1 AND lease_id=$2",
+                "UPDATE custody_keys
+                 SET
+                     he_status = 'ready',
+                     he_material = $3,
+                     he_secret = $4,
+                     lease_id = NULL,
+                     lease_until = NULL
+                 WHERE
+                     account_id = $1
+                     AND lease_id = $2",
             )
             .bind(account)
             .bind(lease)
@@ -111,8 +146,14 @@ pub async fn generate_one(state: &AppState) -> Result<bool> {
         }
         _ => {
             sqlx::query(
-                "UPDATE custody_keys SET he_status='failed', lease_id=NULL, lease_until=NULL
-                 WHERE account_id=$1 AND lease_id=$2",
+                "UPDATE custody_keys
+                 SET
+                     he_status = 'failed',
+                     lease_id = NULL,
+                     lease_until = NULL
+                 WHERE
+                     account_id = $1
+                     AND lease_id = $2",
             )
             .bind(account)
             .bind(lease)
@@ -153,7 +194,11 @@ fn generate(custody: Arc<Custody>, account: Uuid) -> Result<(KeyMaterial, Vec<u8
 
 pub async fn secret(connection: &mut PgConnection, account: Uuid) -> Result<Vec<u8>> {
     sqlx::query_scalar(
-        "SELECT he_secret FROM custody_keys WHERE account_id=$1 AND he_status='ready'",
+        "SELECT he_secret
+         FROM custody_keys
+         WHERE
+             account_id = $1
+             AND he_status = 'ready'",
     )
     .bind(account)
     .fetch_optional(connection)

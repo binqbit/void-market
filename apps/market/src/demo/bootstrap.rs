@@ -33,7 +33,7 @@ async fn initialize_once(state: &AppState) -> Result<()> {
     let mut ownership = state.pool.acquire().await?;
     ownership.close_on_drop();
     let acquired: bool = sqlx::query_scalar(
-        "SELECT pg_try_advisory_lock(hashtextextended(current_schema(),732617231))",
+        "SELECT pg_try_advisory_lock(hashtextextended(current_schema(), 732617231))",
     )
     .fetch_one(&mut *ownership)
     .await?;
@@ -63,9 +63,16 @@ async fn initialize_once(state: &AppState) -> Result<()> {
         .ensure_account("Void Market local faucet")
         .await?;
     sqlx::query(
-        "INSERT INTO
-         localnet_config(singleton,ethereum_genesis,collection_code_hash,zcash_genesis,minter_address,faucet_account,faucet_address)
-         VALUES(TRUE,$1,$2,$3,$4,$5,$6) ON CONFLICT(singleton) DO NOTHING",
+        "INSERT INTO localnet_config (
+             singleton,
+             ethereum_genesis,
+             collection_code_hash,
+             zcash_genesis,
+             minter_address,
+             faucet_account,
+             faucet_address
+         )
+         VALUES (TRUE, $1, $2, $3, $4, $5, $6) ON CONFLICT (singleton) DO NOTHING",
     )
     .bind(&ethereum_genesis)
     .bind(&hash)
@@ -73,7 +80,8 @@ async fn initialize_once(state: &AppState) -> Result<()> {
     .bind(&accounts[0])
     .bind(faucet_account)
     .bind(&faucet_address)
-        .execute(&state.pool).await?;
+    .execute(&state.pool)
+    .await?;
     let deployment = repository::deployment(&state.pool).await?;
     if deployment.ethereum_genesis != ethereum_genesis
         || deployment.zcash_genesis != zcash_genesis
@@ -95,14 +103,15 @@ async fn initialize_once(state: &AppState) -> Result<()> {
         let id = actor_id(alias).ok_or(ApiError::Internal)?;
         let mut tx = state.pool.begin().await?;
         sqlx::query(
-            "INSERT INTO accounts(id,name,username,is_demo) VALUES($1,$2,$3,TRUE) ON CONFLICT(id) DO NOTHING",
+            "INSERT INTO accounts (id, name, username, is_demo)
+             VALUES ($1, $2, $3, TRUE) ON CONFLICT (id) DO NOTHING",
         )
         .bind(id)
         .bind(name)
         .bind(format!("demo_{alias}"))
         .execute(&mut *tx)
         .await?;
-        let existing_demo: bool = sqlx::query_scalar("SELECT is_demo FROM accounts WHERE id=$1")
+        let existing_demo: bool = sqlx::query_scalar("SELECT is_demo FROM accounts WHERE id = $1")
             .bind(id)
             .fetch_one(&mut *tx)
             .await?;
@@ -113,8 +122,8 @@ async fn initialize_once(state: &AppState) -> Result<()> {
         }
         custody.provision(&mut tx, id).await?;
         sqlx::query(
-            "INSERT INTO demo_accounts(account_id,alias,ethereum_address) VALUES($1,$2,$3) ON
-         CONFLICT(account_id) DO NOTHING",
+            "INSERT INTO demo_accounts (account_id, alias, ethereum_address)
+             VALUES ($1, $2, $3) ON CONFLICT (account_id) DO NOTHING",
         )
         .bind(id)
         .bind(alias)
@@ -141,7 +150,11 @@ async fn initialize_once(state: &AppState) -> Result<()> {
             return Err(ApiError::Conflict("Demo Zcash wallet mapping changed"));
         }
         sqlx::query(
-            "UPDATE demo_accounts SET zcash_account=$2,zcash_address=$3 WHERE account_id=$1",
+            "UPDATE demo_accounts
+             SET
+                 zcash_account = $2,
+                 zcash_address = $3
+             WHERE account_id = $1",
         )
         .bind(id)
         .bind(wallet)
@@ -151,7 +164,7 @@ async fn initialize_once(state: &AppState) -> Result<()> {
     }
     // Existing HE-only demo nodes receive their first chain registration once. Later changes fail.
     let nodes: Vec<(uuid::Uuid, Option<String>)> =
-        sqlx::query_as("SELECT id,ethereum_address FROM arbiter_nodes ORDER BY id")
+        sqlx::query_as("SELECT id, ethereum_address FROM arbiter_nodes ORDER BY id")
             .fetch_all(&state.pool)
             .await?;
     let mut assigned: Vec<String> = nodes
@@ -174,7 +187,11 @@ async fn initialize_once(state: &AppState) -> Result<()> {
                 "Configure a separate Ethereum address for every arbiter",
             ))?;
         sqlx::query(
-            "UPDATE arbiter_nodes SET ethereum_address=$2 WHERE id=$1 AND ethereum_address IS NULL",
+            "UPDATE arbiter_nodes
+             SET ethereum_address = $2
+             WHERE
+                 id = $1
+                 AND ethereum_address IS NULL",
         )
         .bind(node)
         .bind(address)
@@ -214,10 +231,17 @@ async fn deploy_collection(
                 .prepare(&deployment.minter_address, None, bytecode)
                 .await?;
             let (id, raw) = chains.ethereum.sign(&transaction).await?;
-            sqlx::query("UPDATE localnet_config SET deployment_transaction=$1,signed_deployment=$2 WHERE singleton")
-                .bind(&id)
-                .bind(&raw)
-                .execute(&state.pool).await?;
+            sqlx::query(
+                "UPDATE localnet_config
+                 SET
+                     deployment_transaction = $1,
+                     signed_deployment = $2
+                 WHERE singleton",
+            )
+            .bind(&id)
+            .bind(&raw)
+            .execute(&state.pool)
+            .await?;
             (id, raw)
         }
         _ => {
@@ -247,7 +271,7 @@ async fn deploy_collection(
             "Deployed NFT code does not match the pinned artifact",
         ));
     }
-    sqlx::query("UPDATE localnet_config SET collection_address=$1 WHERE singleton")
+    sqlx::query("UPDATE localnet_config SET collection_address = $1 WHERE singleton")
         .bind(contract)
         .execute(&state.pool)
         .await?;

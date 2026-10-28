@@ -46,7 +46,7 @@ async fn prepare(state: &AppState, operation: Operation, instance: Uuid) -> Resu
     match &mut payload {
         Payload::Ethereum(plan) => {
             if ethereum_busy(state, &operation, &plan.sender).await? {
-                sqlx::query("UPDATE chain_operations SET updated_at_ms=$2 WHERE id=$1")
+                sqlx::query("UPDATE chain_operations SET updated_at_ms = $2 WHERE id = $1")
                     .bind(operation.id)
                     .bind(messages::now_ms()?)
                     .execute(&state.pool)
@@ -63,7 +63,7 @@ async fn prepare(state: &AppState, operation: Operation, instance: Uuid) -> Resu
         Payload::Zcash(plan) => {
             if wallet_busy(state, &operation, plan.sender_account).await? {
                 // Keep independently requested payments from selecting the same notes.
-                sqlx::query("UPDATE chain_operations SET updated_at_ms=$2 WHERE id=$1")
+                sqlx::query("UPDATE chain_operations SET updated_at_ms = $2 WHERE id = $1")
                     .bind(operation.id)
                     .bind(messages::now_ms()?)
                     .execute(&state.pool)
@@ -111,7 +111,7 @@ async fn prepare(state: &AppState, operation: Operation, instance: Uuid) -> Resu
         },
     )
     .await?;
-    sqlx::query("UPDATE chain_operations SET pczt_sealed=$2 WHERE id=$1")
+    sqlx::query("UPDATE chain_operations SET pczt_sealed = $2 WHERE id = $1")
         .bind(operation.id)
         .bind(pczt)
         .execute(&mut *tx)
@@ -153,7 +153,7 @@ async fn sign(state: &AppState, operation: Operation, instance: Uuid) -> Result<
                     return Ok(());
                 }
                 repository::save_payload(state, &mut tx, &operation, &payload, "building").await?;
-                sqlx::query("UPDATE chain_operations SET pczt_sealed=$2 WHERE id=$1")
+                sqlx::query("UPDATE chain_operations SET pczt_sealed = $2 WHERE id = $1")
                     .bind(operation.id)
                     .bind(seal_blob(state, &operation, "pczt", signed.as_bytes())?)
                     .execute(&mut *tx)
@@ -169,13 +169,20 @@ async fn sign(state: &AppState, operation: Operation, instance: Uuid) -> Result<
     if latest.status != operation.status {
         return Ok(());
     }
-    sqlx::query("UPDATE chain_operations SET
-         signed_transaction=$2,transaction_id=$3,status='signed',revision=nextval('message_revision')
-         WHERE id=$1")
-        .bind(operation.id)
-        .bind(raw)
-        .bind(id)
-        .execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE chain_operations
+         SET
+             signed_transaction = $2,
+             transaction_id = $3,
+             status = 'signed',
+             revision = nextval('message_revision')
+         WHERE id = $1",
+    )
+    .bind(operation.id)
+    .bind(raw)
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(())
 }
@@ -270,8 +277,18 @@ async fn reconcile(state: &AppState, operation: Operation, instance: Uuid) -> Re
 }
 async fn wallet_busy(state: &AppState, operation: &Operation, wallet: Uuid) -> Result<bool> {
     let active: Vec<Operation> = sqlx::query_as(
-        "SELECT * FROM chain_operations WHERE id<>$1 AND status IN
-         ('ready','approved','building','signed','submitted','reconcile')",
+        "SELECT *
+         FROM chain_operations
+         WHERE
+             id <> $1
+             AND status IN (
+                 'ready',
+                 'approved',
+                 'building',
+                 'signed',
+                 'submitted',
+                 'reconcile'
+             )",
     )
     .bind(operation.id)
     .fetch_all(&state.pool)
@@ -288,8 +305,18 @@ async fn wallet_busy(state: &AppState, operation: &Operation, wallet: Uuid) -> R
 
 async fn ethereum_busy(state: &AppState, operation: &Operation, sender: &str) -> Result<bool> {
     let active: Vec<Operation> = sqlx::query_as(
-        "SELECT * FROM chain_operations WHERE id<>$1 AND status IN
-         ('ready','approved','building','signed','submitted','reconcile')",
+        "SELECT *
+         FROM chain_operations
+         WHERE
+             id <> $1
+             AND status IN (
+                 'ready',
+                 'approved',
+                 'building',
+                 'signed',
+                 'submitted',
+                 'reconcile'
+             )",
     )
     .bind(operation.id)
     .fetch_all(&state.pool)

@@ -32,8 +32,8 @@ impl Custody {
         let signer = SigningKey::from_bytes(&seed);
         let sealed = self.vault.seal(account, "signing-key", &*seed)?;
         sqlx::query(
-            "INSERT INTO custody_keys(account_id, signing_key, signing_public_key) VALUES
-             ($1, $2, $3) ON CONFLICT (account_id) DO NOTHING",
+            "INSERT INTO custody_keys (account_id, signing_key, signing_public_key)
+             VALUES ($1, $2, $3) ON CONFLICT (account_id) DO NOTHING",
         )
         .bind(account)
         .bind(sealed)
