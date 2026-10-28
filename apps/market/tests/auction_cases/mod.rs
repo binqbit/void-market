@@ -1,6 +1,7 @@
 mod activity;
 mod closing;
 mod recovery;
+mod visibility;
 
 use crate::support::{Fixture, Identity};
 use actix_web::http::StatusCode;
@@ -52,12 +53,19 @@ async fn the_final_hour_stops_bid_admission_before_the_auction_end() {
         .unwrap();
     let path = format!("/v1/auctions/{auction}");
     let view = fixture
-        .request("GET", &path, Some(&buyer.cookie), Value::Null)
+        .request("GET", &path, Some(&seller.cookie), Value::Null)
         .await
         .2;
     assert_eq!(view["closes_at_ms"], end);
     assert_eq!(view["bidding_closes_at_ms"], end - 3_600_000);
     assert_eq!(view["actions"]["bid"], false);
+    assert_eq!(
+        fixture
+            .request("GET", &path, Some(&buyer.cookie), Value::Null)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
     let response = fixture
         .request(
             "POST",

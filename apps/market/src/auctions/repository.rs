@@ -68,13 +68,6 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         .await?
         .ok_or(ApiError::NotFound)?;
     let seller_view = viewer == Some(auction.seller_id);
-    if matches!(
-        auction.status.as_str(),
-        "draft" | "cancelled" | "deposit_pending"
-    ) && !seller_view
-    {
-        return Err(ApiError::NotFound);
-    }
     let members = participants(&mut connection, id).await?;
     let own = members
         .iter()
@@ -83,6 +76,18 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         .iter()
         .filter(|member| member.account_id != auction.seller_id)
         .collect();
+    let now = messages::now_ms()?;
+    let is_open = auction.status == "open" && auction.bidding_deadline() > now;
+    let accepts_new_buyer = is_open && buyers.len() < auction.buyer_limit as usize;
+    if !seller_view
+        && (matches!(
+            auction.status.as_str(),
+            "draft" | "cancelled" | "deposit_pending"
+        ) || (own.is_none() && !accepts_new_buyer))
+    {
+        return Err(ApiError::NotFound);
+    }
+
     let checks_completed: i64 = sqlx::query_scalar(
         "SELECT count(result) FROM auction_checks WHERE auction_id=$1 AND generation=$2",
     )
@@ -90,7 +95,6 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     .bind(auction.generation)
     .fetch_one(&mut *connection)
     .await?;
-    let now = messages::now_ms()?;
     let healthy = super::clock::healthy(&mut connection, &auction, now).await?;
     let wallet_ready: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM custody_keys WHERE account_id=$1 AND he_status='ready')",
@@ -137,7 +141,6 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     };
     let own_active = own.is_some_and(|member| member.status == "active");
     let bidding_deadline = auction.bidding_deadline();
-    let is_open = auction.status == "open" && bidding_deadline > now;
     let editable = seller_view && auction.status == "draft";
     let actions = Actions {
         close_bidding: cfg!(feature = "demo-mode")
@@ -260,10 +263,13 @@ pub async fn list(
         .await?
     } else {
         sqlx::query_scalar(
-            "SELECT id FROM auctions WHERE status NOT IN ('draft','cancelled','deposit_pending')
-             ORDER BY CASE WHEN status='open' THEN 0 ELSE 1 END, created_at_ms DESC, id DESC
-             LIMIT $1 OFFSET $2",
+            "SELECT a.id FROM auctions a WHERE a.status='open' AND a.closes_at_ms-$2>$1
+             AND (SELECT count(*) FROM auction_participants p
+                  WHERE p.auction_id=a.id AND p.account_id<>a.seller_id)<a.buyer_limit
+             ORDER BY a.created_at_ms DESC, a.id DESC LIMIT $3 OFFSET $4",
         )
+        .bind(messages::now_ms()?)
+        .bind(super::model::APPROVAL_WINDOW_MS)
         .bind(limit)
         .bind(offset)
         .fetch_all(&state.pool)
@@ -271,7 +277,20 @@ pub async fn list(
     };
     let mut views = Vec::with_capacity(ids.len());
     for id in ids {
-        views.push(view(state, id, viewer).await?);
+        match view(state, id, viewer).await {
+            Ok(auction) => {
+                // Recheck admission after loading: a close can race with the catalog query.
+                if mine
+                    || (auction.status == "open"
+                        && auction.bidding_closes_at_ms > messages::now_ms()?
+                        && auction.admitted_buyers < auction.buyer_limit as i64)
+                {
+                    views.push(auction);
+                }
+            }
+            Err(ApiError::NotFound) if !mine => {}
+            Err(error) => return Err(error),
+        }
     }
     Ok(views)
 }
