@@ -15,7 +15,101 @@ use arbiter_protocol::{NewJob, RequestSignature, SigningKey, sign};
 #[cfg(feature = "demo-mode")]
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use market::chains::{Localnet, config::LocalnetConfig};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
+use tokio::sync::watch;
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn verified_checks_finalize_without_waiting_for_the_auction_deadline() {
+    let fixture = Fixture::with_custody().await;
+    let seller = fixture.register("Seller").await;
+    let buyer = fixture.register("Buyer").await;
+    let asset = fixture.asset(&seller).await;
+    let (auction, _) = published(&fixture, &seller, asset).await;
+    super::admit(&fixture, auction, &buyer, 200_000_000).await;
+    let deadline = super::now() + 3_599_000;
+    sqlx::query("UPDATE auctions SET closes_at_ms=$2 WHERE id=$1")
+        .bind(auction)
+        .bind(deadline)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+
+    // Stand in for a persisted, verified result; this test isolates finalization timing.
+    let (session, _) = super::recovery::ready_obligation(&fixture, auction, &buyer, &seller).await;
+    let reference = fixture
+        .state
+        .custody
+        .as_ref()
+        .unwrap()
+        .artifacts
+        .write_json(&true)
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO auction_checks(session_id,auction_id,generation,slot,kind,
+         left_account,right_account,precomputed,result,result_ref)
+         VALUES($1,$2,1,0,'reserve',$3,$4,TRUE,TRUE,$5)",
+    )
+    .bind(session)
+    .bind(auction)
+    .bind(buyer.address)
+    .bind(seller.address)
+    .bind(json!(reference))
+    .execute(&fixture.state.pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE approval_messages SET status='completed' WHERE session_id=$1")
+        .bind(session)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE approval_sessions SET status='completed' WHERE id=$1")
+        .bind(session)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    // Key generation is outside this metadata-only fixture.
+    sqlx::query("UPDATE custody_keys SET he_status='failed'")
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+
+    let (stop, signal) = watch::channel(false);
+    let worker = tokio::spawn(market::messages::run(fixture.state.clone(), signal));
+    let awarded = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let selected: bool =
+                sqlx::query_scalar("SELECT winner_id IS NOT NULL FROM auctions WHERE id=$1")
+                    .bind(auction)
+                    .fetch_one(&fixture.state.pool)
+                    .await
+                    .unwrap();
+            if selected {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await;
+    stop.send(true).unwrap();
+    worker.await.unwrap().unwrap();
+    assert!(
+        awarded.is_ok(),
+        "Ready results must not wait for the deadline"
+    );
+
+    let result: (String, Option<Uuid>, i64) =
+        sqlx::query_as("SELECT status,winner_id,closes_at_ms FROM auctions WHERE id=$1")
+            .bind(auction)
+            .fetch_one(&fixture.state.pool)
+            .await
+            .unwrap();
+    assert_eq!(result.0, "awaiting_completion");
+    assert_eq!(result.1, Some(buyer.address));
+    assert_eq!(result.2, deadline);
+    assert!(super::now() < deadline);
+    fixture.cleanup().await;
+}
 
 #[actix_web::test]
 #[ignore = "requires TEST_DATABASE_URL"]
