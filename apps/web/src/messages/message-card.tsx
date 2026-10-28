@@ -101,50 +101,51 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
 
   return (
     <article className={`message-card ${actionable ? "needs-approval" : ""}`}>
-      <div className="message-topline">
-        <span className="eyebrow">{item.session_title}</span>
-        <span className="message-stage">
-          Step {item.step ?? stage.step} of 5
-        </span>
-      </div>
-      {item.auction_id && (
-        <Link className="text-link" to={`/market/${item.auction_id}`}>
-          View auction
-        </Link>
-      )}
-      <div className="message-title">
-        <span className="message-symbol" aria-hidden="true">
-          {actionable ? <ShieldCheck size={22} /> : <CheckCheck size={22} />}
-        </span>
-        <h2>{stage.title}</h2>
-      </div>
-      <p>{stage.description}</p>
-      <div className="message-status">
-        <span className={actionable ? "status-dot" : ""} />
-        {status}
+      <div className="message-content">
+        <div className="message-topline">
+          <span className="eyebrow">{item.session_title}</span>
+          <span className="message-stage">
+            Step {item.step ?? stage.step} of 5
+          </span>
+        </div>
+        <div className="message-title">
+          <span className="message-symbol" aria-hidden="true">
+            {actionable ? <ShieldCheck size={20} /> : <CheckCheck size={20} />}
+          </span>
+          <h2>{stage.title}</h2>
+        </div>
+        <p className="message-description">{stage.description}</p>
+        {!actionable && <div className="message-status">{status}</div>}
+        <div className="message-links">
+          {item.auction_id && (
+            <Link className="text-link" to={`/market/${item.auction_id}`}>
+              View auction
+            </Link>
+          )}
+          {actionable && item.can_withdraw !== false && (
+            <button
+              className="quiet-button"
+              disabled={busy}
+              onClick={() => setWithdraw(true)}
+            >
+              Withdraw bid
+            </button>
+          )}
+        </div>
       </div>
       {actionable && (
         <>
-          <div className="message-time">
-            <Clock3 size={17} aria-hidden="true" />
-            <strong>
-              {connectionError ? "Reconnecting…" : formatTime(left)}
-            </strong>
-            <span>
-              approval time left in{" "}
-              {item.auction_id ? "this auction" : "this session"}
+          <div className="message-controls">
+            <div className="message-time">
+              <Clock3 size={15} aria-hidden="true" />
+              <strong>
+                {connectionError ? "Reconnecting…" : formatTime(left)}
+              </strong>
+              <span>{item.timer_running ? "remaining" : "paused"}</span>
+            </div>
+            <span className="message-budget">
+              Shared {item.auction_id ? "auction" : "session"} budget
             </span>
-          </div>
-          <p className="message-caption">
-            {connectionError
-              ? "Connection lost. Remaining time will be confirmed when you reconnect."
-              : early
-                ? `You can approve now. Your timer starts only after bidding closes at ${new Date(item.required_from_ms!).toLocaleString()}, while a response is needed from you.`
-                : item.timer_running
-                  ? "Time is shared across all your approval steps. When it runs out, you are disqualified from this session."
-                  : "Timer paused while the service is waiting. Your remaining time is preserved."}
-          </p>
-          <div className="message-actions">
             <button
               className="button primary"
               disabled={busy || deadlineReached}
@@ -161,16 +162,16 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
                   ? "Checking deadline…"
                   : "Approve"}
             </button>
-            {item.can_withdraw !== false && (
-              <button
-                className="quiet-button"
-                disabled={busy}
-                onClick={() => setWithdraw(true)}
-              >
-                Withdraw bid
-              </button>
-            )}
           </div>
+          <p className="message-caption">
+            {connectionError
+              ? "Connection lost. Remaining time will be confirmed when you reconnect."
+              : early
+                ? `You can approve now. Your timer starts only after bidding closes at ${new Date(item.required_from_ms!).toLocaleString()}, while a response is needed from you.`
+                : item.timer_running
+                  ? "Time is shared across all your approval steps. If it runs out, you are disqualified."
+                  : "Timer paused while the service is waiting. Your remaining time is preserved."}
+          </p>
         </>
       )}
       {failure && <ErrorNotice>{failure}</ErrorNotice>}

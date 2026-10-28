@@ -102,68 +102,96 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
     <article
       className={`native-transaction panel ${item.can_approve ? "needs-approval" : ""}`}
     >
-      <div className="message-topline">
-        <span className="eyebrow">
-          {item.network === "zcash"
-            ? "Zcash · Ironwood regtest"
-            : "Ethereum · localnet"}
-        </span>
-        {item.status === "confirmed" ? (
-          <CheckCircle2 size={18} />
-        ) : (
-          <Clock3 size={18} />
+      <div className="message-content">
+        <div className="message-topline">
+          <span className="eyebrow">
+            {item.network === "zcash"
+              ? "Zcash · Ironwood regtest"
+              : "Ethereum · localnet"}
+          </span>
+          {item.status === "confirmed" ? (
+            <CheckCircle2 size={18} aria-hidden="true" />
+          ) : (
+            <Clock3 size={18} aria-hidden="true" />
+          )}
+        </div>
+        <h3>{item.title}</h3>
+        <p className="message-description">
+          {progress[item.status] ?? "Checking transaction status…"}
+        </p>
+        {item.amount && (
+          <p className="native-amount">
+            {item.amount} <span>ZEC</span>
+          </p>
         )}
+        <div className="native-links">
+          {item.auction_id && (
+            <Link className="text-link" to={`/market/${item.auction_id}`}>
+              View auction <ArrowUpRight size={14} />
+            </Link>
+          )}
+          {item.transaction_id && (
+            <code title={item.transaction_id}>
+              {shortAddress(item.transaction_id)}
+            </code>
+          )}
+        </div>
       </div>
-      <h3>{item.title}</h3>
-      <p>{progress[item.status] ?? "Checking transaction status…"}</p>
-      {item.amount && (
-        <p className="native-amount">
-          {item.amount} <span>ZEC</span>
-        </p>
-      )}
-      {item.remaining_ms !== null && item.can_approve && (
-        <p className="field-help">
-          {messagesError
-            ? "Reconnecting…"
-            : formatTime(
-                remainingTime(item.remaining_ms, item.timer_running, elapsed),
-              )}{" "}
-          of your shared auction approval time remains.
-        </p>
-      )}
-      {item.error && <ErrorNotice>{item.error}</ErrorNotice>}
-      {error && <ErrorNotice>{error}</ErrorNotice>}
-      {item.can_approve && (
-        <button
-          className="button primary"
-          disabled={Boolean(messagesError)}
-          onClick={() => {
-            setReview(item);
-            setError(null);
-          }}
-        >
-          <LockKeyhole size={16} /> Review & approve
-        </button>
-      )}
-      {item.status === "failed" && item.kind === "payment" && (
-        <button
-          className="button"
-          disabled={busy}
-          onClick={() => void preparePayment()}
-        >
-          Prepare payment again
-        </button>
-      )}
-      {item.kind === "transfer" &&
-        ["preparing", "ready", "failed"].includes(item.status) && (
+      <div className="message-controls">
+        {item.remaining_ms !== null && item.can_approve && (
+          <>
+            <div className="message-time">
+              <Clock3 size={15} aria-hidden="true" />
+              <strong>
+                {messagesError
+                  ? "Reconnecting…"
+                  : formatTime(
+                      remainingTime(
+                        item.remaining_ms,
+                        item.timer_running,
+                        elapsed,
+                      ),
+                    )}
+              </strong>
+              <span>{item.timer_running ? "remaining" : "paused"}</span>
+            </div>
+            <span className="message-budget">Shared auction budget</span>
+          </>
+        )}
+        {item.can_approve && (
+          <button
+            className="button primary"
+            disabled={Boolean(messagesError)}
+            onClick={() => {
+              setReview(item);
+              setError(null);
+            }}
+          >
+            <LockKeyhole size={16} /> Review & approve
+          </button>
+        )}
+        {item.status === "failed" && item.kind === "payment" && (
           <button
             className="button"
             disabled={busy}
-            onClick={() => void cancelTransfer()}
+            onClick={() => void preparePayment()}
           >
-            Cancel transfer
+            Prepare payment again
           </button>
         )}
+        {item.kind === "transfer" &&
+          ["preparing", "ready", "failed"].includes(item.status) && (
+            <button
+              className="quiet-button"
+              disabled={busy}
+              onClick={() => void cancelTransfer()}
+            >
+              Cancel transfer
+            </button>
+          )}
+      </div>
+      {item.error && <ErrorNotice>{item.error}</ErrorNotice>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}
       {item.kind === "payment" && item.can_approve && (
         <details className="partial-payment">
           <summary>Test a partial payment</summary>
@@ -190,18 +218,6 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
           </button>
         </details>
       )}
-      <div className="native-links">
-        {item.auction_id && (
-          <Link className="text-link" to={`/market/${item.auction_id}`}>
-            View auction <ArrowUpRight size={14} />
-          </Link>
-        )}
-        {item.transaction_id && (
-          <code title={item.transaction_id}>
-            {shortAddress(item.transaction_id)}
-          </code>
-        )}
-      </div>
       {item.confirmation && (
         <details className="partial-payment">
           <summary>Confirmed transaction receipt</summary>

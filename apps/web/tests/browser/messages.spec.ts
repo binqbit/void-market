@@ -246,9 +246,7 @@ test("early approvals keep the timer paused until bidding closes", async ({
   await page.goto("/messages");
   await expect(page.getByText("Step 1 of 5")).toBeVisible();
   await expect(page.getByText("10:00")).toBeVisible();
-  await expect(
-    page.getByText("approval time left in this auction"),
-  ).toBeVisible();
+  await expect(page.getByText("Shared auction budget")).toBeVisible();
   await expect(
     page.getByText(/Your timer starts only after bidding closes/),
   ).toBeVisible();
@@ -269,7 +267,9 @@ test("early approvals keep the timer paused until bidding closes", async ({
   ).toBeVisible();
 });
 
-test("new activity appears first across request types", async ({ page }) => {
+test("new activity appears first across request types in compact cards", async ({
+  page,
+}, info) => {
   const snapshot = await fixture(page);
   snapshot.messages[0].revision = 30;
   snapshot.messages[0].session_title = "Newest private request";
@@ -322,6 +322,22 @@ test("new activity appears first across request types", async ({ page }) => {
     "Approve the sale transfer",
   ]);
 
+  const first = feed.locator("article").first();
+  const bounds = await first.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.height).toBeLessThan(
+    info.project.name === "desktop" ? 240 : 370,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("compact-inbox.png"),
+    fullPage: true,
+  });
+
   snapshot.transactions[0].revision = 40;
   await page.evaluate(() =>
     window.dispatchEvent(new Event("test-messages-hint")),
@@ -334,4 +350,17 @@ test("new activity appears first across request types", async ({ page }) => {
   await expect(
     feed.getByRole("button", { name: "Approve", exact: true }),
   ).toBeEnabled();
+
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(titles.first()).toHaveText("Pay the auction invoice");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("compact-inbox-light.png"),
+    fullPage: true,
+  });
 });
