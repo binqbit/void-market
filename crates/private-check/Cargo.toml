@@ -1,0 +1,22 @@
+[package]
+name = "private-check"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+autotests = false
+
+[[test]]
+name = "native"
+path = "tests/native.rs"
+
+[dependencies]
+tfhe-math = { path = "../tfhe-math" }
+sha2.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+zeroize.workspace = true
+minicbor.workspace = true
+
+[lints]
+workspace = true
