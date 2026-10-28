@@ -1,4 +1,4 @@
-import { normalizeZecInput, zecInputError } from "../amounts";
+import { formatZec, normalizeZecInput, zecInputError } from "../amounts";
 import { useState } from "react";
 import { message, post } from "../api/client";
 import { ErrorNotice } from "../components/feedback";
@@ -12,14 +12,16 @@ export function DraftEditor({
   auction: Auction;
   onComplete: () => void;
 }) {
-  const [reserve, setReserve] = useState(auction.reserve ?? "");
+  const [reserve, setReserve] = useState(() =>
+    formatZec(auction.reserve ?? ""),
+  );
   const [close, setClose] = useState(() => localDateTime(auction.closes_at_ms));
   const [revision, setRevision] = useState(auction.revision);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const changed =
-    reserve !== auction.reserve ||
+    formatZec(reserve) !== formatZec(auction.reserve ?? "") ||
     close !== localDateTime(auction.closes_at_ms);
   const stale = revision !== auction.revision;
 
@@ -43,7 +45,7 @@ export function DraftEditor({
             : {},
       );
       setRevision(updated.revision);
-      setReserve(updated.reserve ?? "");
+      setReserve(formatZec(updated.reserve ?? ""));
       setClose(localDateTime(updated.closes_at_ms));
       setConsent(false);
       onComplete();
@@ -56,7 +58,7 @@ export function DraftEditor({
   }
 
   function latest() {
-    setReserve(auction.reserve ?? "");
+    setReserve(formatZec(auction.reserve ?? ""));
     setClose(localDateTime(auction.closes_at_ms));
     setRevision(auction.revision);
     setConsent(false);

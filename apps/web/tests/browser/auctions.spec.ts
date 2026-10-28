@@ -305,12 +305,62 @@ test("portfolio draft requires explicit publish consent", async ({ page }) => {
     .fill("1.25000000");
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(new RegExp(`/market/${id}$`));
+  await expect(
+    page.getByLabel("Private reserve price · ZEC", { exact: true }),
+  ).toHaveValue("1.25");
+  await expect(
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
   const publish = page.getByRole("button", { name: "Publish auction" });
   await expect(publish).toBeDisabled();
   await page.getByRole("checkbox").check();
   await publish.click();
   await expect(page.getByText("Open for bids", { exact: true })).toBeVisible();
   expect(consent).toEqual({ revision: 7, consent: true });
+});
+
+test("draft amounts stay compact without changing saved terms or precision", async ({
+  page,
+}) => {
+  const data = auction();
+  data.status = "draft";
+  data.reserve = "1.00000000";
+  data.published_at_ms = null;
+  data.actions.edit = true;
+  data.actions.publish = true;
+  data.actions.cancel = true;
+  data.actions.bid = false;
+  await fixture(page, "seller", data);
+  const saved: string[] = [];
+  await page.route(`**/api/v1/auctions/${id}/draft`, async (route) => {
+    const body = route.request().postDataJSON();
+    saved.push(body.reserve);
+    data.reserve = body.reserve === "2.5" ? "2.50000000" : body.reserve;
+    data.revision += 1;
+    await route.fulfill({ json: data });
+  });
+
+  await page.goto(`/market/${id}`);
+  const reserve = page.getByLabel("Private reserve price · ZEC", {
+    exact: true,
+  });
+  const save = page.getByRole("button", { name: "Save changes" });
+  await expect(reserve).toHaveValue("1.0");
+  await expect(save).toBeDisabled();
+  await reserve.fill("1.00000000");
+  await expect(save).toBeDisabled();
+  await expect(page.getByRole("checkbox")).toBeEnabled();
+
+  await reserve.fill("90071992.54740993");
+  await save.click();
+  await expect(save).toBeDisabled();
+  await expect(reserve).toHaveValue("90071992.54740993");
+  await reserve.fill("2.5");
+  await save.click();
+  await expect(reserve).toHaveValue("2.5");
+  await expect(save).toBeDisabled();
+  await expect(page.getByRole("checkbox")).toBeEnabled();
+  expect(saved).toEqual(["90071992.54740993", "2.5"]);
 });
 
 test("seller completes from Messages with payment explicitly unverified", async ({
