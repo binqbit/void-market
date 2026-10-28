@@ -5,7 +5,7 @@ import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
 import { AssetImage } from "../components/asset-image";
 import { useAuctionQuery } from "../auctions/use-auctions";
-import { accountName, statusLabels } from "../auctions/types";
+import { accountName, auctionReasons, statusLabels } from "../auctions/types";
 import type { Auction } from "../auctions/types";
 import { BidForm } from "../auctions/bid-form";
 import { CompleteSaleButton } from "../auctions/complete-button";
@@ -15,21 +15,6 @@ import { useMessages } from "../messages/provider";
 import { TransactionCard } from "../demo/transaction-card";
 import { loginHref } from "../auth/return-to";
 import { CloseBiddingButton } from "../auctions/close-bidding-button";
-
-const reasons: Record<string, string> = {
-  no_remaining_buyers:
-    "No participating buyers remain. The asset stays with the seller.",
-  reserve_not_met:
-    "No remaining bid met the private reserve. The asset stays with the seller.",
-  seller_approval_expired:
-    "The seller's approval time expired. The asset stays with the seller.",
-  comparison_interrupted:
-    "The arbiter's check was interrupted. No buyer was disqualified for this service failure.",
-  invalid_comparison_result:
-    "The check could not be accepted. Ownership has not changed.",
-  inconsistent_transcript:
-    "The comparison results could not be reconciled. Ownership has not changed.",
-};
 
 export function AuctionPage() {
   const { id } = useParams();
@@ -172,7 +157,9 @@ export function AuctionPage() {
               </p>
             )}
             {auction.reason && (
-              <p>{reasons[auction.reason] ?? "This auction has ended."}</p>
+              <p>
+                {auctionReasons[auction.reason] ?? "This auction has ended."}
+              </p>
             )}
             {auction.status === "matching" && (
               <>

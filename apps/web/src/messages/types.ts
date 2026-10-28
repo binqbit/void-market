@@ -30,6 +30,12 @@ export interface ApprovalMessage {
 }
 
 export interface MessageSnapshot {
+  outcomes?: {
+    auction_id: string;
+    title: string;
+    status: "completed" | "no_sale" | "interrupted";
+    reason: string | null;
+  }[];
   transactions?: import("../demo/types").NativeTransaction[];
   custody_mode: "development" | "disabled";
   revision: number;

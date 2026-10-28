@@ -1,7 +1,7 @@
 import { ArrowUpRight, Clock3, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AssetImage } from "../components/asset-image";
-import { accountName, statusLabels } from "./types";
+import { accountName, auctionReasons, statusLabels } from "./types";
 import type { Auction } from "./types";
 
 export function AuctionCard({ auction }: { auction: Auction }) {
@@ -22,6 +22,9 @@ export function AuctionCard({ auction }: { auction: Auction }) {
           <Link to={`/market/${auction.id}`}>{auction.asset.name}</Link>
         </h2>
         <p>{auction.asset.description || "No description provided."}</p>
+        {auction.reason && auctionReasons[auction.reason] && (
+          <p>{auctionReasons[auction.reason]}</p>
+        )}
         <div className="auction-card-meta">
           <LockKeyhole size={15} />
           Private bids · ZEC

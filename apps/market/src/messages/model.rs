@@ -63,6 +63,15 @@ pub struct Snapshot {
     pub sessions: Vec<SessionSummary>,
     pub sales: Vec<crate::auctions::model::SaleRequest>,
     pub transactions: Vec<crate::settlement::model::OperationView>,
+    pub outcomes: Vec<AuctionOutcome>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct AuctionOutcome {
+    pub auction_id: Uuid,
+    pub title: String,
+    pub status: String,
+    pub reason: Option<String>,
 }
 
 #[derive(Deserialize)]

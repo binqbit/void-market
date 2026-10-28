@@ -264,6 +264,18 @@
   font-size: 0.85rem;
   margin: 0;
 }
+.auction-outcome {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.auction-outcome .auction-status {
+  margin-bottom: 6px;
+}
+.auction-outcome .text-link {
+  margin-top: 10px;
+}
 @media (max-width: 640px) {
   .message-session {
     align-items: flex-start;

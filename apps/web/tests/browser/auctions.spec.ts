@@ -303,6 +303,34 @@ test("closed bidding leaves the public market and stays in participant history",
   ).toHaveAttribute("href", "/portfolio");
 });
 
+test("portfolio explains why an auction ended without a sale", async ({
+  page,
+}) => {
+  const data = auction();
+  data.status = "no_sale";
+  data.reason = "reserve_not_met";
+  data.actions.bid = false;
+  data.your_bid = "0.67000000";
+  data.participation = {
+    status: "active",
+    remaining_ms: 600000,
+    timer_running: false,
+    created_at_ms: Date.now(),
+  };
+  await fixture(page, "buyer", data);
+  await page.goto("/portfolio");
+  await page.getByRole("tab", { name: "My auctions" }).click();
+  const card = page.locator("article").filter({ hasText: data.asset.name });
+  await expect(card).toContainText(
+    "The auction ended without a sale because no eligible bid met the private reserve.",
+  );
+  await card.getByRole("link", { name: "View auction" }).click();
+  await expect(page.locator(".auction-summary")).toContainText(
+    "The auction ended without a sale because no eligible bid met the private reserve.",
+  );
+  await expect(page.getByText("Your private reserve")).toHaveCount(0);
+});
+
 test("an outsider loses cached auction details when bidding closes", async ({
   page,
 }) => {
@@ -624,7 +652,7 @@ test("withdrawal explains no reentry and updates the authoritative outcome", asy
     .click();
   await expect(
     page.getByText(
-      "No participating buyers remain. The asset stays with the seller.",
+      "The auction ended without a sale because no participating buyers remain.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Review bid" })).toHaveCount(0);

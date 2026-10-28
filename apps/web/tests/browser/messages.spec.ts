@@ -118,6 +118,35 @@ test("messages show one clear approval and preserve the layout", async ({
   ).toHaveCount(0);
 });
 
+test("messages show the auction outcome after the final approval", async ({
+  page,
+}) => {
+  const snapshot = await fixture(page);
+  snapshot.pending = 0;
+  snapshot.messages = [];
+  snapshot.sessions = [];
+  snapshot.outcomes = [
+    {
+      auction_id: sessionId,
+      title: "Dark Matter",
+      status: "no_sale",
+      reason: "reserve_not_met",
+    },
+  ];
+  await page.goto("/messages");
+  const results = page.getByRole("region", { name: "Auction results" });
+  await expect(results).toContainText("No sale");
+  await expect(results).toContainText(
+    "The auction ended without a sale because no eligible bid met the private reserve.",
+  );
+  await expect(
+    results.getByRole("link", { name: "View auction" }),
+  ).toHaveAttribute("href", `/market/${sessionId}`);
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("an update arriving during snapshot loading is not lost", async ({
   page,
 }) => {

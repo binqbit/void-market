@@ -91,6 +91,21 @@ export const statusLabels: Record<AuctionStatus, string> = {
   cancelled: "Draft cancelled",
 };
 
+export const auctionReasons: Record<string, string> = {
+  no_remaining_buyers:
+    "The auction ended without a sale because no participating buyers remain.",
+  reserve_not_met:
+    "The auction ended without a sale because no eligible bid met the private reserve.",
+  seller_approval_expired:
+    "The seller's approval time expired. The asset stays with the seller.",
+  comparison_interrupted:
+    "The arbiter's check was interrupted. No buyer was disqualified for this service failure.",
+  invalid_comparison_result:
+    "The check could not be accepted. Ownership has not changed.",
+  inconsistent_transcript:
+    "The comparison results could not be reconciled. Ownership has not changed.",
+};
+
 export function accountName(account: Account): string {
   return account.username ? `@${account.username}` : account.name;
 }

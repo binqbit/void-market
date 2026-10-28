@@ -10,6 +10,7 @@ import { TransactionCard } from "../demo/transaction-card";
 import { inboxEntries, needsApproval } from "../messages/inbox";
 import type { InboxEntry } from "../messages/inbox";
 import { loginHref } from "../auth/return-to";
+import { AuctionOutcomes } from "../messages/auction-outcomes";
 import type { ApprovalMessage } from "../messages/types";
 
 export function MessagesPage() {
@@ -29,6 +30,7 @@ export function MessagesPage() {
         !pending.some((message) => message.session_id === item.id),
     ) ?? [];
   const entries = inboxEntries(snapshot);
+  const outcomes = snapshot?.outcomes ?? [];
   const requestGroups = new Map<string, InboxEntry[]>();
   for (const entry of entries) {
     const key = entry.item.auction_id ?? entry.key;
@@ -97,7 +99,7 @@ export function MessagesPage() {
             ),
           )}
         </section>
-      ) : !error ? (
+      ) : !error && outcomes.length === 0 ? (
         <section className="empty-state messages-empty">
           <Inbox size={36} strokeWidth={1.3} aria-hidden="true" />
           <h2>You are all caught up</h2>
@@ -112,6 +114,7 @@ export function MessagesPage() {
           ))}
         </section>
       )}
+      <AuctionOutcomes outcomes={outcomes} />
       {history.length > 0 && (
         <section className="message-history">
           <h2>Recent activity</h2>
