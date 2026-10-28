@@ -25,6 +25,8 @@ pub fn configure(state: AppState) -> impl FnOnce(&mut web::ServiceConfig) {
         config.configure(crate::nodes::configure);
         config.service(
             web::scope("")
+                .configure(crate::demo::configure)
+                .configure(crate::settlement::configure)
                 .configure(crate::auctions::configure)
                 .configure(crate::messages::configure)
                 .app_data(web::Data::new(state))

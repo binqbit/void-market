@@ -40,6 +40,11 @@ pub async fn transfer(
     if asset.active_auction_id.is_some() {
         return Err(ApiError::Conflict("This asset is locked in an auction"));
     }
+    if asset.nft.is_some() {
+        return Err(ApiError::Conflict(
+            "Native NFT transfers require review and confirmation of an Ethereum transaction",
+        ));
+    }
     if actor == input.recipient_address {
         return Err(ApiError::BadRequest("Recipient must differ from sender"));
     }

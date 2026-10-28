@@ -206,6 +206,11 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     .fetch_all(&state.pool)
     .await?;
     let sales = crate::auctions::pending_sales(state, account).await?;
+    let transactions = crate::settlement::service::list(state, account).await?;
+    let transaction_actions = transactions
+        .iter()
+        .filter(|operation| operation.can_approve)
+        .count();
     Ok(Snapshot {
         custody_mode: if state.custody.is_some() {
             "development"
@@ -214,10 +219,11 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
         },
         revision,
         server_time_ms: now,
-        pending: pending as usize + sales.len(),
+        pending: pending as usize + sales.len() + transaction_actions,
         messages,
         sessions,
         sales,
+        transactions,
     })
 }
 
@@ -230,7 +236,11 @@ pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
     .bind(account)
     .fetch_one(pool)
     .await?;
-    Ok(messages.max(crate::auctions::revision(pool, account).await?))
+    let native:i64=sqlx::query_scalar("SELECT COALESCE(max(revision),0) FROM chain_operations WHERE account_id=$1 OR recipient_id=$1")
+        .bind(account).fetch_one(pool).await?;
+    Ok(messages
+        .max(crate::auctions::revision(pool, account).await?)
+        .max(native))
 }
 
 pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) -> Result<Value> {

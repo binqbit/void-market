@@ -24,7 +24,7 @@ const STATE_COOKIE: &str = "market_google_state";
 pub async fn config(state: web::Data<AppState>) -> HttpResponse {
     HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
-        .json(json!({ "google": state.config.google.is_some() }))
+        .json(json!({ "google": state.config.google.is_some(), "demo": state.chains.is_some() }))
 }
 
 pub async fn start(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {

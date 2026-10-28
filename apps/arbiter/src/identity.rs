@@ -39,6 +39,7 @@ pub fn initialize(directory: &Path, deployment_id: Uuid) -> Result<Uuid> {
     let node_id = Uuid::new_v4();
     let signing = SigningKey::from_bytes(&key);
     let provision = NodeProvision {
+        ethereum_address: std::env::var("ETHEREUM_CUSTODY_ADDRESS").ok(),
         node_id,
         deployment_id,
         name: "Arbiter node".to_owned(),

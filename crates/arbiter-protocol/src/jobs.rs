@@ -21,6 +21,8 @@ pub struct Registration {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeProvision {
+    #[serde(default)]
+    pub ethereum_address: Option<String>,
     pub deployment_id: Uuid,
     pub node_id: Uuid,
     pub name: String,

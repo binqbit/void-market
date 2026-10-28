@@ -16,6 +16,31 @@ use uuid::Uuid;
 
 #[actix_web::test]
 #[ignore = "requires TEST_DATABASE_URL"]
+async fn demo_login_and_resources_are_disabled_in_the_normal_profile() {
+    let fixture = Fixture::new().await;
+    let (_, _, config) = fixture
+        .request("GET", "/v1/auth/config", None, Value::Null)
+        .await;
+    assert_eq!(config["demo"], false);
+    assert_eq!(
+        fixture
+            .request("GET", "/v1/demo", None, Value::Null)
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        fixture
+            .request("POST", "/v1/demo/login", None, json!({"actor":"alice"}))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    fixture.cleanup().await;
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
 async fn profile_username_uniqueness_and_private_email() {
     let fixture = Fixture::new().await;
     let alice = fixture.register("Alice").await;
@@ -215,6 +240,7 @@ async fn ownership_transfer_retries_authorization_and_restart() {
     fixture.state = AppState::new(
         fixture.state.pool.clone(),
         market::config::Config {
+            localnet: None,
             custody: None,
             database: fixture.state.config.database.clone(),
             listen: fixture.state.config.listen,

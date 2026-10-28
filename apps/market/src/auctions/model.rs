@@ -55,6 +55,11 @@ pub struct FrozenInput {
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct AuctionRow {
+    pub execution: String,
+    pub custody_status: String,
+    pub payment_status: String,
+    pub settlement_note: Option<String>,
+    pub payment_invoice: Option<Vec<u8>>,
     pub id: Uuid,
     pub asset_id: Uuid,
     pub seller_id: Uuid,
@@ -99,6 +104,7 @@ pub(crate) struct Participant {
 
 #[derive(Serialize)]
 pub struct SaleRequest {
+    pub payment_status: String,
     pub auction_id: Uuid,
     pub request_id: Uuid,
     pub generation: i64,
@@ -119,7 +125,10 @@ pub struct AuctionView {
     pub reason: Option<String>,
     pub currency: &'static str,
     pub execution: &'static str,
-    pub payment_status: &'static str,
+    pub payment_status: String,
+    pub custody_status: String,
+    pub settlement_note: Option<String>,
+    pub payment: Option<serde_json::Value>,
     pub wallet_ready: bool,
     pub closes_at_ms: i64,
     pub created_at_ms: i64,

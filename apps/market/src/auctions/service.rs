@@ -20,6 +20,9 @@ pub async fn bid(state: &AppState, buyer: Uuid, id: Uuid, input: PlaceBid) -> Re
         return Err(ApiError::BadRequest("Bid at least 0.00000001 ZEC"));
     }
     let original = repository::get(&state.pool, id).await?;
+    if original.execution == "localnet" {
+        crate::demo::repository::actor(&state.pool, buyer).await?;
+    }
     if original.seller_id == buyer {
         return Err(ApiError::Forbidden);
     }
@@ -145,6 +148,13 @@ pub async fn withdraw(state: &AppState, buyer: Uuid, id: Uuid) -> Result<Value> 
     if auction.seller_id == buyer {
         return Err(ApiError::Forbidden);
     }
+    if auction.execution == "localnet"
+        && crate::settlement::auction::payment_started(&mut tx, id).await?
+    {
+        return Err(ApiError::Conflict(
+            "Payment was authorized; settlement must finish before any further withdrawal",
+        ));
+    }
     let members = repository::participants(&mut tx, id).await?;
     let own = members
         .iter()
@@ -244,6 +254,35 @@ pub async fn complete(
     }
     let winner = auction.winner_id.ok_or(ApiError::Internal)?;
     let award = auction.award_hash.as_ref().ok_or(ApiError::Internal)?;
+    if auction.execution == "localnet" {
+        let digest = inputs::digest(
+            "LOCALNET_DELIVERY_ACK_V1",
+            &(id, auction.generation, award, winner, input.request_id),
+        )?;
+        let mut receipt = messages::sign_action(
+            state,
+            &mut tx,
+            messages::ActionBinding {
+                account: seller,
+                session: id,
+                action: input.request_id,
+                request: id,
+                revision: input.generation,
+                digest: digest
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| ApiError::Internal)?,
+                purpose: "complete_native_sale",
+                received_ms: now,
+            },
+        )
+        .await?;
+        receipt["payment_status"] = json!("confirmed");
+        receipt["transfer_id"] = json!(input.request_id);
+        crate::settlement::auction::deliver(state, &mut tx, &auction, receipt.clone()).await?;
+        tx.commit().await?;
+        return Ok(receipt);
+    }
     let transfer = Uuid::new_v4();
     let digest = inputs::digest(
         "AUCTION_DELIVERY_V1",

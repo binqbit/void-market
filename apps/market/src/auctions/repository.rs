@@ -68,7 +68,11 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         .await?
         .ok_or(ApiError::NotFound)?;
     let seller_view = viewer == Some(auction.seller_id);
-    if matches!(auction.status.as_str(), "draft" | "cancelled") && !seller_view {
+    if matches!(
+        auction.status.as_str(),
+        "draft" | "cancelled" | "deposit_pending"
+    ) && !seller_view
+    {
         return Err(ApiError::NotFound);
     }
     let members = participants(&mut connection, id).await?;
@@ -94,6 +98,24 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     .bind(viewer)
     .fetch_one(&mut *connection)
     .await?;
+    let settlement_started = if auction.execution == "localnet" {
+        crate::settlement::auction::payment_started(&mut connection, id).await?
+    } else {
+        false
+    };
+    let payment = if auction.execution == "localnet"
+        && (seller_view || viewer == auction.winner_id)
+        && auction.winner_id.is_some()
+    {
+        let expected =
+            crate::settlement::auction::amount_due(state, &mut connection, &auction).await?;
+        let credited = crate::settlement::auction::paid(state, &mut connection, &auction).await?;
+        Some(
+            serde_json::json!({"expected":amount::format(expected),"paid":amount::format(credited),"remaining":amount::format(expected.saturating_sub(credited))}),
+        )
+    } else {
+        None
+    };
     connection.commit().await?;
     let active_count = buyers
         .iter()
@@ -131,11 +153,16 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
             && buyers.len() < auction.buyer_limit as usize,
         withdraw: !seller_view
             && own_active
+            && !settlement_started
             && matches!(
                 auction.status.as_str(),
                 "open" | "matching" | "awaiting_completion"
             ),
-        complete: seller_view && own_active && auction.status == "awaiting_completion",
+        complete: seller_view
+            && own_active
+            && auction.status == "awaiting_completion"
+            && (auction.execution == "internal"
+                || (auction.payment_status == "confirmed" && auction.custody_status == "held")),
     };
     let participation = own.map(|member| {
         let running = member.chargeable && healthy && own_active;
@@ -166,8 +193,15 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         status: auction.status,
         reason: auction.reason,
         currency: "ZEC",
-        execution: "development_custody",
-        payment_status: "unverified",
+        execution: if auction.execution == "localnet" {
+            "localnet_custody"
+        } else {
+            "development_custody"
+        },
+        payment_status: auction.payment_status,
+        custody_status: auction.custody_status,
+        settlement_note: auction.settlement_note,
+        payment,
         wallet_ready,
         closes_at_ms: auction.closes_at_ms,
         created_at_ms: auction.created_at_ms,
@@ -222,7 +256,7 @@ pub async fn list(
         .await?
     } else {
         sqlx::query_scalar(
-            "SELECT id FROM auctions WHERE status NOT IN ('draft','cancelled')
+            "SELECT id FROM auctions WHERE status NOT IN ('draft','cancelled','deposit_pending')
              ORDER BY CASE WHEN status='open' THEN 0 ELSE 1 END, created_at_ms DESC, id DESC
              LIMIT $1 OFFSET $2",
         )
@@ -264,6 +298,7 @@ pub async fn pending_sales(state: &AppState, account: Uuid) -> Result<Vec<SaleRe
         }
         let participant = auction.participation.ok_or(ApiError::Internal)?;
         requests.push(SaleRequest {
+            payment_status: auction.payment_status,
             auction_id: id,
             request_id: auction.completion_request_id.ok_or(ApiError::Internal)?,
             generation: auction.generation,

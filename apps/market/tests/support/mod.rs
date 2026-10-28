@@ -78,6 +78,7 @@ impl Fixture {
         let media = base.join(&schema);
         tokio::fs::create_dir_all(&media).await.unwrap();
         let config = Config {
+            localnet: None,
             custody: custody_enabled.then(|| market::custody::config::CustodyConfig {
                 master_key: zeroize::Zeroizing::new([43; 32]),
                 artifacts: media.join("checks"),

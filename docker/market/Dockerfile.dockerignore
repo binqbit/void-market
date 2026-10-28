@@ -8,6 +8,10 @@
 !apps/market/**
 !apps/arbiter/
 !apps/arbiter/**
+!contracts/
+!contracts/demo-nft/
+!contracts/demo-nft/artifacts/
+!contracts/demo-nft/artifacts/**
 !docker/
 !docker/market/
 !docker/market/Dockerfile

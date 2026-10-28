@@ -51,6 +51,7 @@ async fn manual_user_approvals_complete_the_real_custodial_check() {
     let state = AppState::new(
         pool.clone(),
         Config {
+            localnet: None,
             custody: Some(CustodyConfig {
                 master_key: zeroize::Zeroizing::new([55; 32]),
                 artifacts: root.join("artifacts"),
@@ -110,6 +111,7 @@ async fn manual_user_approvals_complete_the_real_custodial_check() {
     nodes::provision(
         &pool,
         NodeProvision {
+            ethereum_address: None,
             deployment_id: deployment,
             node_id: node,
             name: "Test node".into(),

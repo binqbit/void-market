@@ -11,6 +11,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY apps/market ./apps/market
 COPY apps/arbiter ./apps/arbiter
+COPY contracts/demo-nft/artifacts ./contracts/demo-nft/artifacts
 
 RUN cargo build --locked --release --package market
 

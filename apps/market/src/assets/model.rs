@@ -9,6 +9,8 @@ pub struct Asset {
     pub image: Option<String>,
     pub owner_id: Uuid,
     pub active_auction_id: Option<Uuid>,
+    pub nft: Option<serde_json::Value>,
+    pub pending_transaction_id: Option<Uuid>,
     pub created_at: String,
 }
 

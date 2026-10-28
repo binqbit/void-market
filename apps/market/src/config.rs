@@ -3,6 +3,7 @@ use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use url::Url;
 
 pub struct Config {
+    pub localnet: Option<crate::chains::config::LocalnetConfig>,
     pub custody: Option<crate::custody::config::CustodyConfig>,
     pub database: PgConnectOptions,
     pub listen: SocketAddr,
@@ -79,6 +80,7 @@ impl Config {
         };
 
         Ok(Self {
+            localnet: crate::chains::config::LocalnetConfig::from_env()?,
             custody: crate::custody::config::CustodyConfig::from_env()?,
             database,
             listen: setting("LISTEN", "127.0.0.1:8080").parse()?,

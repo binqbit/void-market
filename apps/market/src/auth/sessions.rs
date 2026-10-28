@@ -40,11 +40,12 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
     };
     let claims = tokens::verify(&token, &state.config.jwt_secret)?;
     let account: Option<Uuid> = sqlx::query_scalar(
-        "SELECT account_id
-         FROM sessions
-         WHERE token_hash = $1 AND expires_at > now()",
+        "SELECT s.account_id
+         FROM sessions s JOIN accounts a ON a.id=s.account_id
+         WHERE s.token_hash = $1 AND s.expires_at > now() AND (NOT a.is_demo OR $2)",
     )
     .bind(token_hash(&token)?)
+    .bind(state.chains.is_some())
     .fetch_optional(&state.pool)
     .await?;
     account

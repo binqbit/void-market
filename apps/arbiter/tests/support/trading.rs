@@ -60,6 +60,7 @@ impl Trading {
         let state = AppState::new(
             pool.clone(),
             Config {
+                localnet: None,
                 custody: Some(CustodyConfig {
                     master_key: zeroize::Zeroizing::new([61; 32]),
                     artifacts: root.join("checks"),
@@ -121,6 +122,7 @@ impl Trading {
         nodes::provision(
             &pool,
             NodeProvision {
+                ethereum_address: None,
                 node_id,
                 deployment_id: deployment,
                 name: "Trading fixture node".into(),

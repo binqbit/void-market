@@ -8,6 +8,7 @@ use webauthn_rs::prelude::{Webauthn, WebauthnBuilder};
 
 #[derive(Clone)]
 pub struct AppState {
+    pub chains: Option<Arc<crate::chains::Localnet>>,
     pub auction_preparations: Arc<tokio::sync::Semaphore>,
     pub message_streams: Arc<tokio::sync::Semaphore>,
     pub custody: Option<Arc<crate::custody::Custody>>,
@@ -34,6 +35,12 @@ impl AppState {
             .map(crate::custody::Custody::new)
             .transpose()?;
         Ok(Self {
+            chains: config
+                .localnet
+                .as_ref()
+                .map(crate::chains::Localnet::new)
+                .transpose()?
+                .map(Arc::new),
             auction_preparations: Arc::new(tokio::sync::Semaphore::new(2)),
             message_streams: Arc::new(tokio::sync::Semaphore::new(64)),
             custody: custody.map(Arc::new),

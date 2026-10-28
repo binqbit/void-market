@@ -57,6 +57,7 @@ pub struct Snapshot {
     pub messages: Vec<Message>,
     pub sessions: Vec<SessionSummary>,
     pub sales: Vec<crate::auctions::model::SaleRequest>,
+    pub transactions: Vec<crate::settlement::model::OperationView>,
 }
 
 #[derive(Deserialize)]

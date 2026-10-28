@@ -12,7 +12,7 @@ async fn main() -> ExitCode {
     let command = env::args().nth(1).unwrap_or_else(|| "serve".to_owned());
     if command == "--help" || command == "-h" {
         println!(concat!(
-            "market <serve|worker|migrate|healthcheck>\n",
+            "market <serve|worker|migrate|healthcheck|init-demo>\n",
             "market <provision-node|enqueue-node-job|provide-node-response|create-approval-session> FILE.json\n",
             "Configuration:\n",
             "  DATABASE_URL or DATABASE_* and DATABASE_PASSWORD_FILE\n",

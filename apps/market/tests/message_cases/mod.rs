@@ -17,6 +17,7 @@ async fn ready(fixture: &Fixture, first: &Identity, second: &Identity) -> (Uuid,
     nodes::provision(
         &fixture.state.pool,
         NodeProvision {
+            ethereum_address: None,
             node_id: node,
             deployment_id: Uuid::new_v4(),
             name: "Fixture node".into(),

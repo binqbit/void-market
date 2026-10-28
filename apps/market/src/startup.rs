@@ -20,6 +20,11 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
     if !database::ready(&pool).await {
         return Err("Database migrations are missing or incompatible; run migrate first".into());
     }
+    if command == "init-demo" {
+        let state = AppState::new(pool, config)?;
+        crate::demo::initialize(&state).await?;
+        return Ok(());
+    }
 
     if command == "create-approval-session" {
         let path = std::env::args()

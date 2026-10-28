@@ -41,6 +41,7 @@ impl Node {
         nodes::provision(
             &fixture.state.pool,
             NodeProvision {
+                ethereum_address: None,
                 deployment_id: node.deployment,
                 node_id: node.id,
                 name: "Test node".to_owned(),
@@ -328,5 +329,46 @@ async fn jobs_stay_on_their_node_and_only_one_worker_claims_them() {
         .await
         .unwrap();
     assert_eq!(count, 1);
+    fixture.cleanup().await;
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn provisioning_retries_preserve_the_registered_identity() {
+    let fixture = Fixture::new().await;
+    let key = SigningKey::from_bytes(&[21; 32]);
+    let token = fixture
+        .state
+        .config
+        .media_root
+        .join("provision-retry.token");
+    fs::write(&token, "fixture-only-node-service-token-0123456789").unwrap();
+    let mut registration = NodeProvision {
+        node_id: Uuid::new_v4(),
+        deployment_id: Uuid::new_v4(),
+        name: "Retry-safe node".to_owned(),
+        public_key: public_key(&key),
+        token_file: token.to_string_lossy().into_owned(),
+        ethereum_address: Some("0x1234567890123456789012345678901234567890".into()),
+    };
+    nodes::provision(&fixture.state.pool, registration.clone())
+        .await
+        .unwrap();
+    nodes::provision(&fixture.state.pool, registration.clone())
+        .await
+        .unwrap();
+    registration.ethereum_address = Some("0x2234567890123456789012345678901234567890".into());
+    assert!(
+        nodes::provision(&fixture.state.pool, registration.clone())
+            .await
+            .is_err()
+    );
+    let retained: String =
+        sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id=$1")
+            .bind(registration.node_id)
+            .fetch_one(&fixture.state.pool)
+            .await
+            .unwrap();
+    assert_eq!(retained, "0x1234567890123456789012345678901234567890");
     fixture.cleanup().await;
 }

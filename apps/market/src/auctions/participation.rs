@@ -110,6 +110,16 @@ pub async fn exclude(
     } else if survivors.is_empty() {
         finish(connection, auction, "no_sale", "no_remaining_buyers", now).await?;
     } else if matches!(current.status.as_str(), "matching" | "awaiting_completion") {
+        if current.execution == "localnet" {
+            sqlx::query("UPDATE chain_operations SET status='cancelled',revision=nextval('message_revision') WHERE auction_id=$1 AND status IN ('preparing','ready','failed') AND approval IS NULL")
+                .bind(auction).execute(&mut *connection).await?;
+            sqlx::query(
+                "UPDATE auctions SET payment_invoice=NULL,payment_status='unverified' WHERE id=$1",
+            )
+            .bind(auction)
+            .execute(&mut *connection)
+            .await?;
+        }
         let active: Vec<_> = survivors
             .iter()
             .map(|member| {

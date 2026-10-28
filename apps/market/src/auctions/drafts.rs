@@ -47,19 +47,33 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
     if asset.owner_id != seller {
         return Err(ApiError::Forbidden);
     }
-    if asset.active_auction_id.is_some() {
+    if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {
         return Err(ApiError::Conflict(
             "This asset is already locked in an auction",
         ));
     }
+    let execution = if asset.nft.is_some() {
+        if state.chains.is_none() {
+            return Err(ApiError::Unavailable);
+        }
+        crate::demo::repository::actor(&state.pool, seller).await?;
+        "localnet"
+    } else {
+        if state.chains.is_some() {
+            return Err(ApiError::Conflict(
+                "Use Get NFT on the Demo page to obtain a native local NFT",
+            ));
+        }
+        "internal"
+    };
     let now = messages::now_ms()?;
     closing_time(now, input.closes_at_ms)?;
     custody.provision(&mut tx, seller).await?;
     let snapshot = json!({"id":asset.id,"name":asset.name,
-        "description":asset.description,"image":asset.image});
+        "description":asset.description,"image":asset.image,"nft":asset.nft});
     sqlx::query(
         "INSERT INTO auctions(id,asset_id,seller_id,closes_at_ms,asset_snapshot,
-         creation_hash,created_at_ms,buyer_limit) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+         creation_hash,created_at_ms,buyer_limit,execution) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
     )
     .bind(input.request_id)
     .bind(input.asset_id)
@@ -69,6 +83,7 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
     .bind(creation_hash)
     .bind(now)
     .bind(BUYER_LIMIT as i16)
+    .bind(execution)
     .execute(&mut *tx)
     .await?;
     sqlx::query(
@@ -181,7 +196,7 @@ pub async fn publish(
     if asset.owner_id != seller {
         return Err(ApiError::Forbidden);
     }
-    if asset.active_auction_id.is_some() {
+    if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {
         return Err(ApiError::Conflict(
             "This asset is already locked in another auction",
         ));
@@ -206,7 +221,7 @@ pub async fn publish(
     if asset.owner_id != seller {
         return Err(ApiError::Forbidden);
     }
-    if asset.active_auction_id.is_some() {
+    if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {
         return Err(ApiError::Conflict(
             "This asset is already locked in another auction",
         ));
@@ -214,15 +229,28 @@ pub async fn publish(
     let now = messages::now_ms()?;
     closing_time(now, auction.closes_at_ms)?;
     let node: Option<Uuid> = sqlx::query_scalar(
-        "SELECT n.id FROM arbiter_nodes n WHERE n.enabled AND n.heartbeat_until>now()
+        "SELECT n.id FROM arbiter_nodes n WHERE n.enabled AND n.heartbeat_until>now() AND ($1=FALSE OR n.ethereum_address IS NOT NULL)
          ORDER BY (SELECT count(*) FROM auctions a WHERE a.node_id=n.id
          AND a.status IN ('open','matching','awaiting_completion')),n.id LIMIT 1 FOR UPDATE OF n",
     )
+    .bind(auction.execution == "localnet")
     .fetch_optional(&mut *tx)
     .await?;
     let node = node.ok_or(ApiError::Unavailable)?;
     let snapshot = json!({"id":asset.id,"name":asset.name,
-        "description":asset.description,"image":asset.image});
+        "description":asset.description,"image":asset.image,"nft":asset.nft});
+    let native_terms = if auction.execution == "localnet" {
+        let address: Option<String> =
+            sqlx::query_scalar("SELECT ethereum_address FROM arbiter_nodes WHERE id=$1")
+                .bind(node)
+                .fetch_one(&mut *tx)
+                .await?;
+        json!({"custodian":address,"network":"ethereum-local-31337","payments":"ironwood-regtest",
+            "seller_timeout":"accept_after_confirmed_full_payment","buyer_timeout":"breach_and_return",
+            "confirmations":3,"partial_payments":"top_up_same_invoice"})
+    } else {
+        serde_json::Value::Null
+    };
     let policy = inputs::digest(
         "AUCTION_POLICY_V1",
         &(
@@ -235,8 +263,13 @@ pub async fn publish(
             "ZEC",
             "bid_ge_reserve",
             "earliest_admission",
-            "seller_ack_payment_unverified",
+            if auction.execution == "localnet" {
+                "native_payment_then_seller_ack_or_timeout"
+            } else {
+                "seller_ack_payment_unverified"
+            },
             &frozen,
+            &native_terms,
         ),
     )?;
     let receipt = messages::sign_action(
@@ -266,7 +299,7 @@ pub async fn publish(
     .execute(&mut *tx)
     .await?;
     sqlx::query(
-        "UPDATE auctions SET status='open',node_id=$2,asset_snapshot=$3,policy_hash=$4,
+        "UPDATE auctions SET status=$7,custody_status=$8,node_id=$2,asset_snapshot=$3,policy_hash=$4,
          published_at_ms=$5,publish_receipt=$6,revision=nextval('message_revision') WHERE id=$1",
     )
     .bind(id)
@@ -275,8 +308,14 @@ pub async fn publish(
     .bind(policy)
     .bind(now)
     .bind(&receipt)
+    .bind(if auction.execution == "localnet" { "deposit_pending" } else { "open" })
+    .bind(if auction.execution == "localnet" { "deposit_pending" } else { "none" })
     .execute(&mut *tx)
     .await?;
+    if auction.execution == "localnet" {
+        let updated = repository::lock(&mut tx, id).await?;
+        crate::settlement::auction::deposit(state, &mut tx, &updated).await?;
+    }
     events::record_node(
         &mut tx,
         "auction.published",

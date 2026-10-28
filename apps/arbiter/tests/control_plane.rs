@@ -111,6 +111,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
     let state = AppState::new(
         pool.clone(),
         MarketConfig {
+            localnet: None,
             custody: None,
             database: market_db,
             listen: "127.0.0.1:0".parse().unwrap(),
@@ -175,6 +176,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
     nodes::provision(
         &pool,
         NodeProvision {
+            ethereum_address: None,
             deployment_id: deployment,
             node_id: id,
             name: "Recovery test node".to_owned(),

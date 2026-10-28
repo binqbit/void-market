@@ -5,9 +5,10 @@ use uuid::Uuid;
 
 pub async fn get(pool: &PgPool, id: Uuid) -> Result<Asset> {
     sqlx::query_as(
-        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text,
+        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text, a.nft, a.pending_transaction_id,
          (SELECT id FROM auctions WHERE asset_id=a.id AND status IN
-         ('open','matching','awaiting_completion')) AS active_auction_id
+        ('deposit_pending','open','matching','awaiting_completion') OR asset_id=a.id AND custody_status IN
+        ('deposit_pending','held','return_pending','delivery_pending','review')) AS active_auction_id
          FROM assets a WHERE a.id = $1",
     )
     .bind(id)
@@ -19,9 +20,10 @@ pub async fn get(pool: &PgPool, id: Uuid) -> Result<Asset> {
 pub async fn lock(connection: &mut PgConnection, id: Uuid) -> Result<Asset> {
     // Identity is immutable. This serializes ownership changes while allowing foreign-key checks.
     sqlx::query_as(
-        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text,
+        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text, a.nft, a.pending_transaction_id,
          (SELECT id FROM auctions WHERE asset_id=a.id AND status IN
-         ('open','matching','awaiting_completion')) AS active_auction_id
+        ('deposit_pending','open','matching','awaiting_completion') OR asset_id=a.id AND custody_status IN
+        ('deposit_pending','held','return_pending','delivery_pending','review')) AS active_auction_id
          FROM assets a WHERE a.id = $1 FOR NO KEY UPDATE OF a",
     )
     .bind(id)
@@ -32,9 +34,10 @@ pub async fn lock(connection: &mut PgConnection, id: Uuid) -> Result<Asset> {
 
 pub async fn owned(pool: &PgPool, owner: Uuid, limit: i64, offset: i64) -> Result<Vec<Asset>> {
     Ok(sqlx::query_as(
-        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text,
+        "SELECT a.id, a.name, a.description, a.image, a.owner_id, a.created_at::text, a.nft, a.pending_transaction_id,
          (SELECT id FROM auctions WHERE asset_id=a.id AND status IN
-         ('open','matching','awaiting_completion')) AS active_auction_id
+        ('deposit_pending','open','matching','awaiting_completion') OR asset_id=a.id AND custody_status IN
+        ('deposit_pending','held','return_pending','delivery_pending','review')) AS active_auction_id
          FROM assets a WHERE a.owner_id = $1
          ORDER BY a.created_at DESC, a.id DESC
          LIMIT $2 OFFSET $3",

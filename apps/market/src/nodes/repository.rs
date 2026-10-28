@@ -50,6 +50,11 @@ impl Row {
 }
 
 pub async fn provision(pool: &PgPool, input: NodeProvision) -> Result<()> {
+    let ethereum_address = input
+        .ethereum_address
+        .as_deref()
+        .map(crate::chains::ethereum::abi::address)
+        .transpose()?;
     if input.name.is_empty() || input.name.len() > 64 {
         return Err(ApiError::BadRequest("Invalid node name"));
     }
@@ -60,17 +65,35 @@ pub async fn provision(pool: &PgPool, input: NodeProvision) -> Result<()> {
             "Node token must contain 32 to 256 characters",
         ));
     }
+    let token_hash = Sha256::digest(token.as_bytes()).to_vec();
     sqlx::query(
-        "INSERT INTO arbiter_nodes(id, deployment_id, name, public_key, token_hash)
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO arbiter_nodes(id, deployment_id, name, public_key, token_hash, ethereum_address)
+         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(id) DO NOTHING",
     )
     .bind(input.node_id)
     .bind(input.deployment_id)
-    .bind(input.name)
-    .bind(input.public_key)
-    .bind(Sha256::digest(token.as_bytes()).to_vec())
+    .bind(&input.name)
+    .bind(&input.public_key)
+    .bind(&token_hash)
+    .bind(&ethereum_address)
     .execute(pool)
     .await?;
+    let stored: (Uuid, String, String, Vec<u8>, Option<String>) = sqlx::query_as(
+        "SELECT deployment_id,name,public_key,token_hash,ethereum_address FROM arbiter_nodes WHERE id=$1",
+    ).bind(input.node_id).fetch_one(pool).await?;
+    if stored
+        != (
+            input.deployment_id,
+            input.name,
+            input.public_key,
+            token_hash,
+            ethereum_address,
+        )
+    {
+        return Err(ApiError::Conflict(
+            "This node ID is already registered with different identity details",
+        ));
+    }
     Ok(())
 }
 
