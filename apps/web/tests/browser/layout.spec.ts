@@ -62,7 +62,7 @@ test("header stays fixed while changing pages and themes", async ({ page }) => {
     if (!(await navigation.isVisible()))
       await page.getByRole("button", { name: /Open navigation/ }).click();
     await navigation.getByRole("link", { name: label, exact: true }).click();
-    await expect(page).toHaveURL(`http://localhost:3000${path}`);
+    await expect(page).toHaveURL(path);
     await expect(
       navigation.getByRole("link", {
         name: label,
