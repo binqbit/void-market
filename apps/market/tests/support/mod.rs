@@ -34,8 +34,8 @@ pub struct Identity {
 
 impl Fixture {
     pub async fn new() -> Self {
-        let url = env::var("MARKET_TEST_DATABASE_URL")
-            .expect("Set MARKET_TEST_DATABASE_URL to an isolated PostgreSQL instance");
+        let url = env::var("TEST_DATABASE_URL")
+            .expect("Set TEST_DATABASE_URL to an isolated PostgreSQL instance");
         let options = PgConnectOptions::from_str(&url).unwrap();
         let admin = PgPoolOptions::new()
             .max_connections(2)
@@ -66,7 +66,7 @@ impl Fixture {
             .unwrap();
         database::MIGRATIONS.run(&pool).await.unwrap();
 
-        let base = env::var_os("MARKET_TEST_MEDIA_ROOT")
+        let base = env::var_os("TEST_MEDIA_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(env::temp_dir);
         let media = base.join(&schema);
@@ -78,9 +78,11 @@ impl Fixture {
             rp_id: "localhost".to_owned(),
             secure_cookie: false,
             media_root: media.clone(),
-            kafka_brokers: env::var("MARKET_TEST_KAFKA_BROKERS")
+            kafka_brokers: env::var("TEST_KAFKA_BROKERS")
                 .unwrap_or_else(|_| "127.0.0.1:1".to_owned()),
             event_topic: "test.voidmarket.assets.events.v1".to_owned(),
+            jwt_secret: vec![42; 32],
+            google: None,
         };
         let state = AppState::new(pool, config).unwrap();
         Self {

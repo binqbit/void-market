@@ -39,13 +39,15 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
     let http_state = state.clone();
     let server = HttpServer::new(move || {
         let state = http_state.clone();
-        App::new().wrap(Logger::default()).configure(move |config| {
-            if worker_mode {
-                router::configure_worker(state)(config);
-            } else {
-                router::configure(state)(config);
-            }
-        })
+        App::new()
+            .wrap(Logger::default().exclude("/v1/auth/google/callback"))
+            .configure(move |config| {
+                if worker_mode {
+                    router::configure_worker(state)(config);
+                } else {
+                    router::configure(state)(config);
+                }
+            })
     })
     .workers(2)
     .disable_signals()

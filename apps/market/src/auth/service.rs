@@ -63,13 +63,20 @@ pub async fn register_finish(
     .bind(serde_json::to_value(&passkey).map_err(|_| ApiError::Internal)?)
     .execute(&mut *tx)
     .await?;
-    let cookie = sessions::issue(&mut tx, account_id, state.config.secure_cookie).await?;
+    let cookie = sessions::issue(
+        &mut tx,
+        account_id,
+        state.config.secure_cookie,
+        &state.config.jwt_secret,
+    )
+    .await?;
     tx.commit().await?;
     Ok((
         cookie,
         Account {
             address: account_id,
             name,
+            username: None,
         },
     ))
 }
@@ -142,7 +149,13 @@ pub async fn login_finish(state: &AppState, input: LoginFinish) -> Result<(Heade
     .bind(account_id)
     .execute(&mut *tx)
     .await?;
-    let cookie = sessions::issue(&mut tx, account_id, state.config.secure_cookie).await?;
+    let cookie = sessions::issue(
+        &mut tx,
+        account_id,
+        state.config.secure_cookie,
+        &state.config.jwt_secret,
+    )
+    .await?;
     tx.commit().await?;
 
     let account = repository::get(&state.pool, account_id).await?;

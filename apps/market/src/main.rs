@@ -11,9 +11,14 @@ async fn main() -> ExitCode {
         .init();
     let command = env::args().nth(1).unwrap_or_else(|| "serve".to_owned());
     if command == "--help" || command == "-h" {
-        println!(
-            "market <serve|worker|migrate|healthcheck>\nConfiguration: MARKET_DATABASE_URL or MARKET_DATABASE_* and MARKET_DATABASE_PASSWORD_FILE; MARKET_LISTEN; MARKET_ORIGIN; MARKET_RP_ID; MARKET_MEDIA_ROOT; MARKET_KAFKA_BROKERS; MARKET_EVENT_TOPIC"
-        );
+        println!(concat!(
+            "market <serve|worker|migrate|healthcheck>\n",
+            "Configuration:\n",
+            "  DATABASE_URL or DATABASE_* and DATABASE_PASSWORD_FILE\n",
+            "  LISTEN; ORIGIN; RP_ID; MEDIA_ROOT; KAFKA_BROKERS; EVENT_TOPIC\n",
+            "  JWT_SECRET or JWT_SECRET_FILE\n",
+            "  GOOGLE_CLIENT_ID; GOOGLE_CLIENT_SECRET or GOOGLE_CLIENT_SECRET_FILE"
+        ));
         return ExitCode::SUCCESS;
     }
     match market::startup::run(&command).await {

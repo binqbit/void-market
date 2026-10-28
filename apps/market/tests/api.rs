@@ -12,7 +12,118 @@ use support::{Fixture, ORIGIN};
 use uuid::Uuid;
 
 #[actix_web::test]
-#[ignore = "requires MARKET_TEST_DATABASE_URL"]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn profile_username_uniqueness_and_private_email() {
+    let fixture = Fixture::new().await;
+    let alice = fixture.register("Alice").await;
+    let bob = fixture.register("Bob").await;
+    sqlx::query("UPDATE accounts SET email = 'alice@example.test' WHERE id = $1")
+        .bind(alice.address)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    let update = json!({"name":"Alice", "username":"alice"});
+    let (status, _, profile) = fixture
+        .request(
+            "POST",
+            "/v1/me/profile",
+            Some(&alice.cookie),
+            update.clone(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(profile["email"], "alice@example.test");
+    assert_eq!(
+        fixture
+            .request("POST", "/v1/me/profile", Some(&bob.cookie), update)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        fixture
+            .request(
+                "POST",
+                "/v1/me/profile",
+                Some(&alice.cookie),
+                json!({"name":"Alice", "username":"another_name"})
+            )
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    let (_, _, public) = fixture
+        .request(
+            "GET",
+            &format!("/v1/accounts/{}", alice.address),
+            None,
+            Value::Null,
+        )
+        .await;
+    assert_eq!(public["username"], "alice");
+    assert!(public.get("email").is_none());
+    fixture.cleanup().await;
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn google_flow_binds_state_to_browser_and_uses_pkce() {
+    let mut fixture = Fixture::new().await;
+    std::sync::Arc::get_mut(&mut fixture.state.config)
+        .unwrap()
+        .google = Some(market::config::GoogleConfig {
+        client_id: "test-client".to_owned(),
+        client_secret: "fixture-only-secret".to_owned(),
+    });
+    let (status, headers, _) = fixture
+        .request("GET", "/v1/auth/google/start", None, Value::Null)
+        .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    let url = url::Url::parse(headers.get(header::LOCATION).unwrap().to_str().unwrap()).unwrap();
+    let parameters = url
+        .query_pairs()
+        .collect::<std::collections::HashMap<_, _>>();
+    assert_eq!(parameters["code_challenge_method"], "S256");
+    assert_eq!(
+        parameters["redirect_uri"],
+        "http://localhost:3000/api/v1/auth/google/callback"
+    );
+    assert_ne!(parameters["state"], parameters["nonce"]);
+    let cookie = headers.get(header::SET_COOKIE).unwrap().to_str().unwrap();
+    assert!(cookie.contains("HttpOnly"));
+    assert!(cookie.contains("SameSite=Lax"));
+    let state = &parameters["state"];
+    let callback = format!("/v1/auth/google/callback?state={state}&error=access_denied");
+    let (_, response, _) = fixture.request("GET", &callback, None, Value::Null).await;
+    assert_eq!(
+        response.get(header::LOCATION).unwrap(),
+        "/login?error=google"
+    );
+    let (_, response, _) = fixture
+        .request(
+            "GET",
+            &callback,
+            Some(cookie.split(';').next().unwrap()),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(
+        response.get(header::LOCATION).unwrap(),
+        "/login?error=google"
+    );
+    assert!(
+        response
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("Max-Age=0")
+    );
+    fixture.cleanup().await;
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
 async fn ownership_transfer_retries_authorization_and_restart() {
     let mut fixture = Fixture::new().await;
     let alice = fixture.register("Alice").await;
@@ -109,6 +220,8 @@ async fn ownership_transfer_retries_authorization_and_restart() {
             media_root: fixture.state.config.media_root.clone(),
             kafka_brokers: fixture.state.config.kafka_brokers.clone(),
             event_topic: fixture.state.config.event_topic.clone(),
+            jwt_secret: fixture.state.config.jwt_secret.clone(),
+            google: None,
         },
     )
     .unwrap();
@@ -139,7 +252,7 @@ async fn ownership_transfer_retries_authorization_and_restart() {
 }
 
 #[actix_web::test]
-#[ignore = "requires MARKET_TEST_DATABASE_URL"]
+#[ignore = "requires TEST_DATABASE_URL"]
 async fn concurrent_transfers_and_duplicate_requests_are_atomic() {
     let fixture = Fixture::new().await;
     let alice = fixture.register("Alice").await;
@@ -195,7 +308,7 @@ async fn concurrent_transfers_and_duplicate_requests_are_atomic() {
 }
 
 #[actix_web::test]
-#[ignore = "requires MARKET_TEST_DATABASE_URL"]
+#[ignore = "requires TEST_DATABASE_URL"]
 async fn sessions_origin_checks_and_single_use_passkey_ceremonies() {
     let fixture = Fixture::new().await;
     let mut alice = fixture.register("Alice").await;
@@ -289,7 +402,7 @@ async fn sessions_origin_checks_and_single_use_passkey_ceremonies() {
 }
 
 #[actix_web::test]
-#[ignore = "requires MARKET_TEST_DATABASE_URL"]
+#[ignore = "requires TEST_DATABASE_URL"]
 async fn image_upload_is_bounded_and_does_not_accept_foreign_paths() {
     let fixture = Fixture::new().await;
     let alice = fixture.register("Alice").await;
@@ -370,7 +483,7 @@ async fn image_upload_is_bounded_and_does_not_accept_foreign_paths() {
 }
 
 #[actix_web::test]
-#[ignore = "requires MARKET_TEST_DATABASE_URL and MARKET_TEST_KAFKA_BROKERS"]
+#[ignore = "requires TEST_DATABASE_URL and TEST_KAFKA_BROKERS"]
 async fn broker_failure_keeps_outbox_events_for_retry() {
     let fixture = Fixture::new().await;
     let alice = fixture.register("Alice").await;

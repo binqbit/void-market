@@ -1,3 +1,4 @@
+use super::tokens;
 use crate::{
     http::error::{ApiError, Result},
     state::AppState,
@@ -8,10 +9,9 @@ use actix_web::{
     http::header::{self, HeaderMap, HeaderValue},
     web,
 };
-use rand::{TryRngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use sqlx::PgConnection;
-use std::{fmt::Write, future::Future, pin::Pin};
+use std::{future::Future, pin::Pin};
 use uuid::Uuid;
 
 pub const COOKIE_NAME: &str = "market_session";
@@ -38,6 +38,7 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
     let Some(token) = token(headers) else {
         return Ok(None);
     };
+    let claims = tokens::verify(&token, &state.config.jwt_secret)?;
     let account: Option<Uuid> = sqlx::query_scalar(
         "SELECT account_id
          FROM sessions
@@ -47,6 +48,7 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
     .fetch_optional(&state.pool)
     .await?;
     account
+        .filter(|account| *account == claims.sub)
         .map(Principal)
         .map(Some)
         .ok_or(ApiError::Unauthorized)
@@ -56,15 +58,9 @@ pub async fn issue(
     connection: &mut PgConnection,
     account: Uuid,
     secure: bool,
+    secret: &[u8],
 ) -> Result<HeaderValue> {
-    let mut random = [0u8; 32];
-    OsRng
-        .try_fill_bytes(&mut random)
-        .map_err(|_| ApiError::Internal)?;
-    let mut token = String::with_capacity(64);
-    for byte in random {
-        write!(&mut token, "{byte:02x}").map_err(|_| ApiError::Internal)?;
-    }
+    let token = tokens::issue(account, secret)?;
 
     sqlx::query(
         "INSERT INTO sessions(token_hash, account_id, expires_at)
@@ -104,7 +100,7 @@ fn token(headers: &HeaderMap) -> Option<String> {
 }
 
 fn token_hash(token: &str) -> Result<Vec<u8>> {
-    if token.len() != 64 || !token.bytes().all(|c| c.is_ascii_hexdigit()) {
+    if token.is_empty() || token.len() > 4096 {
         return Err(ApiError::Unauthorized);
     }
     Ok(Sha256::digest(token.as_bytes()).to_vec())

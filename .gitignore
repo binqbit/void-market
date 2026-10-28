@@ -4,6 +4,7 @@
 # Ignore rules do not encrypt archives or remove already tracked content.
 .env
 .env.*
+!/.env.example
 *.key
 *.pem
 *.sqlite

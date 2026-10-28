@@ -6,7 +6,7 @@ use actix_web::{
     body::{EitherBody, MessageBody},
     dev::{ServiceRequest, ServiceResponse},
     http::{Method, header},
-    middleware::{Next, from_fn},
+    middleware::{DefaultHeaders, Next, from_fn},
     web,
 };
 
@@ -31,9 +31,16 @@ pub fn configure(state: AppState) -> impl FnOnce(&mut web::ServiceConfig) {
                     }),
                 )
                 .wrap(from_fn(check_origin))
+                .wrap(DefaultHeaders::new().add((header::CACHE_CONTROL, "no-store")))
                 .wrap(cors)
                 .route("/health/live", web::get().to(health::live))
                 .route("/health/ready", web::get().to(health::ready))
+                .route("/v1/auth/config", web::get().to(auth::google::config))
+                .route("/v1/auth/google/start", web::get().to(auth::google::start))
+                .route(
+                    "/v1/auth/google/callback",
+                    web::get().to(auth::google::callback),
+                )
                 .route(
                     "/v1/auth/registration/options",
                     web::post().to(auth::routes::register_options),
@@ -52,6 +59,7 @@ pub fn configure(state: AppState) -> impl FnOnce(&mut web::ServiceConfig) {
                 )
                 .route("/v1/auth/logout", web::post().to(auth::routes::logout))
                 .route("/v1/me", web::get().to(accounts::routes::me))
+                .route("/v1/me/profile", web::post().to(accounts::routes::update))
                 .route("/v1/accounts/{id}", web::get().to(accounts::routes::get))
                 .route("/v1/assets", web::post().to(assets::routes::register))
                 .route("/v1/assets/{id}", web::get().to(assets::routes::get))

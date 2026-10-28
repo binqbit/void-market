@@ -10,18 +10,22 @@ x-service: &service
     - /tmp
   secrets:
     - database_password
-  environment: &asset-environment
-    MARKET_LISTEN: 0.0.0.0:8080
-    MARKET_ORIGIN: ${MARKET_ORIGIN:-http://localhost:3000}
-    MARKET_RP_ID: ${MARKET_RP_ID:-localhost}
-    MARKET_DATABASE_HOST: db
-    MARKET_DATABASE_PORT: "5432"
-    MARKET_DATABASE_NAME: market
-    MARKET_DATABASE_USER: market
-    MARKET_DATABASE_PASSWORD_FILE: /run/secrets/database_password
-    MARKET_KAFKA_BROKERS: kafka:9092
-    MARKET_EVENT_TOPIC: ${MARKET_EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
-    MARKET_MEDIA_ROOT: /var/lib/market/media
+    - jwt_secret
+  environment:
+    LISTEN: 0.0.0.0:8080
+    ORIGIN: ${ORIGIN:-http://localhost:3000}
+    RP_ID: ${RP_ID:-localhost}
+    DATABASE_HOST: db
+    DATABASE_PORT: "5432"
+    DATABASE_NAME: market
+    DATABASE_USER: market
+    DATABASE_PASSWORD_FILE: /run/secrets/database_password
+    KAFKA_BROKERS: kafka:9092
+    EVENT_TOPIC: ${EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
+    MEDIA_ROOT: /var/lib/market/media
+    JWT_SECRET_FILE: /run/secrets/jwt_secret
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     RUST_LOG: info
   volumes:
     - media_data:/var/lib/market/media
@@ -100,7 +104,7 @@ services:
       - --create
       - --if-not-exists
       - --topic
-      - ${MARKET_EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
+      - ${EVENT_TOPIC:-dev.voidmarket.assets.events.v1}
       - --partitions
       - "1"
       - --replication-factor
@@ -121,7 +125,7 @@ services:
     <<: *service
     command: ["serve"]
     ports:
-      - 127.0.0.1:${MARKET_HTTP_PORT:-8080}:8080
+      - 127.0.0.1:${HTTP_PORT:-8080}:8080
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -151,7 +155,9 @@ services:
 
 secrets:
   database_password:
-    environment: MARKET_DATABASE_PASSWORD
+    environment: DATABASE_PASSWORD
+  jwt_secret:
+    environment: JWT_SECRET
 
 volumes:
   postgres_data:
