@@ -17,9 +17,13 @@
 }
 .main-nav a.demo-nav {
   color: #dabb69;
+  text-shadow:
+    0 0 10px #dabb6959,
+    0 0 22px #dabb692e;
 }
 .main-nav a.demo-nav.active .nav-label::after {
   background: #dabb69;
+  box-shadow: 0 0 10px #dabb6966;
 }
 .demo-notice {
   display: flex;
