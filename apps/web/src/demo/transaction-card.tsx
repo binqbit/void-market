@@ -244,7 +244,7 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
               onChange={(event) =>
                 setPartial(normalizeZecInput(event.target.value))
               }
-              placeholder="0.50000000"
+              placeholder="0.5"
             />
           </label>
           {zecInputError(partial) && (

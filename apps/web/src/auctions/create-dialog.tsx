@@ -58,7 +58,7 @@ export function CreateAuctionDialog({
             required
             inputMode="decimal"
             maxLength={32}
-            placeholder="0.00000000"
+            placeholder="0.0"
             value={reserve}
             disabled={busy}
             onChange={(event) =>

@@ -15,7 +15,9 @@ export function BidForm({
   onComplete: () => void;
   initialAmount?: string;
 }) {
-  const [amount, setAmount] = useState(initialAmount ?? "");
+  const [amount, setAmount] = useState(() =>
+    initialAmount ? formatZec(initialAmount) : "",
+  );
   const [review, setReview] = useState(false);
   const [intent, setIntent] = useState<{
     request_id: string;
@@ -64,7 +66,7 @@ export function BidForm({
           inputMode="decimal"
           maxLength={32}
           value={amount}
-          placeholder="0.00000000"
+          placeholder="0.0"
           onChange={(event) => setAmount(normalizeZecInput(event.target.value))}
         />
       </label>
