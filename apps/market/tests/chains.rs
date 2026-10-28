@@ -126,10 +126,49 @@ async fn observation_rpc(
             serde_json::json!({"confirmations":if data.1 {2}else{3},"height":17,"blockhash":"canonical"})
         }
         "getblockhash" => serde_json::json!("canonical"),
+        "getblockcount" => serde_json::json!(17),
         "getwalletstatus" => {
             serde_json::json!({"wallet_tip":{"height":17},"node_tip":{"height":17},"locked":false})
         }
         "z_viewtransaction" => data.0.clone(),
+        other => panic!("Unexpected RPC method {other}"),
+    };
+    actix_web::web::Json(serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}))
+}
+
+#[actix_web::test]
+async fn wallet_sync_rejects_a_cached_node_tip() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let server = actix_web::HttpServer::new(|| {
+        actix_web::App::new().route("/", actix_web::web::post().to(stale_tip_rpc))
+    })
+    .workers(1)
+    .listen(listener)
+    .unwrap()
+    .run();
+    let handle = server.handle();
+    actix_web::rt::spawn(server);
+    let client = market::chains::zcash::Zcash {
+        node: market::chains::rpc::Rpc::new(url::Url::parse(&endpoint).unwrap(), None).unwrap(),
+        wallet: market::chains::rpc::Rpc::new(url::Url::parse(&endpoint).unwrap(), None).unwrap(),
+    };
+    let synchronized = client.synchronized().await.unwrap();
+    handle.stop(true).await;
+    assert!(
+        !synchronized,
+        "A wallet's cached node tip is not the live chain tip"
+    );
+}
+
+async fn stale_tip_rpc(
+    body: actix_web::web::Json<serde_json::Value>,
+) -> actix_web::web::Json<serde_json::Value> {
+    let result = match body["method"].as_str().unwrap() {
+        "getwalletstatus" => {
+            serde_json::json!({"wallet_tip":{"height":17},"node_tip":{"height":17},"locked":false})
+        }
+        "getblockcount" => serde_json::json!(18),
         other => panic!("Unexpected RPC method {other}"),
     };
     actix_web::web::Json(serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}))

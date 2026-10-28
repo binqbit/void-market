@@ -102,6 +102,7 @@ def main():
         "zebra",
         "zallet",
         "localnet-miner",
+        "localnet-faucet",
     )
     rpc = Rpc(f"http://127.0.0.1:{values['ETHEREUM_RPC_PORT']}")
     identity_parent = state / "identity-parent"

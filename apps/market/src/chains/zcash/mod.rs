@@ -43,10 +43,18 @@ impl Zcash {
 
     pub async fn synchronized(&self) -> Result<bool> {
         let status = self.wallet.call("getwalletstatus", json!([])).await?;
-        Ok(status
-            .get("wallet_tip")
-            .is_some_and(|tip| !tip.is_null() && tip == &status["node_tip"])
-            && status["locked"] == false)
+        let Some(tip) = status.get("wallet_tip").filter(|tip| !tip.is_null()) else {
+            return Ok(false);
+        };
+
+        if tip != &status["node_tip"] || status["locked"] != false {
+            return Ok(false);
+        }
+
+        let height = self.node.call("getblockcount", json!([])).await?;
+        Ok(tip["height"]
+            .as_u64()
+            .is_some_and(|value| Some(value) == height.as_u64()))
     }
 
     pub async fn balance(&self, account: uuid::Uuid) -> Result<u64> {

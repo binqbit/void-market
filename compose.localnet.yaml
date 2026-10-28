@@ -44,8 +44,22 @@ services:
     <<: *localnet
     command: ["miner"]
     depends_on:
+      zebra:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "/opt/localnet/node.py", "mining-health"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+  localnet-faucet:
+    <<: *localnet
+    command: ["faucet"]
+    depends_on:
       zallet:
         condition: service_started
+      localnet-miner:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "/opt/localnet/node.py", "health"]
       interval: 10s
@@ -60,6 +74,8 @@ services:
     depends_on:
       localnet-miner:
         condition: service_healthy
+      localnet-faucet:
+        condition: service_healthy
   worker:
     environment:
       <<: *chain-env
@@ -67,6 +83,8 @@ services:
       - ${LOCALNET_STATE_DIR}:/var/lib/localnet:ro
     depends_on:
       localnet-miner:
+        condition: service_healthy
+      localnet-faucet:
         condition: service_healthy
   migrate:
     environment:
