@@ -65,7 +65,7 @@ export function DraftEditor({
   }
 
   return (
-    <section className="auction-action-panel">
+    <section className="auction-action-panel auction-draft">
       <h2>Review your draft</h2>
       <p>
         The asset stays available until you publish. Published terms cannot be
