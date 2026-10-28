@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build only the market backend; HE crates are not application dependencies.
+# Build the market API and worker, including optional development custody.
 FROM rust:1.94.0-bookworm AS build
 
 RUN apt-get update \
