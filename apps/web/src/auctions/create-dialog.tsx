@@ -77,8 +77,9 @@ export function CreateAuctionDialog({
           />
         </label>
         <p className="field-help">
-          The development profile admits up to 3 buyers. No payments are
-          processed.
+          Up to 3 buyers. Required availability starts one hour before this
+          time. Participants share a 10-minute budget across their approval
+          requests; they can prepare available approvals earlier.
         </p>
         {error && <ErrorNotice>{error}</ErrorNotice>}
         <button

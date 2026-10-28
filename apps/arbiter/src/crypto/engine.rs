@@ -4,13 +4,14 @@ use crate::{
 };
 use arbiter_protocol::ArtifactRef;
 use check_workflow::messages::{
-    self as records, Assurance, CheckManifest, ContextRecord, Request, Response,
+    self as records, Assurance, CheckManifest, ContextRecord, Contribution, Request, Response,
 };
 use private_check::{
     AnswerCommitment, CheckContext, CheckSession, ComputationContext, MaskedBooleanAnswer,
     NumberInput, OwnerId, OwnerMaskContribution, OwnerMaskOpening, PreparedBooleanMasks,
     PreparedComparison, PreparedTransfer, TransferBinding, TransferResponse, TransferredNumber,
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 use tfhe_math::{
     EncryptionContext, EvaluationContext,
     codec::{
@@ -25,7 +26,14 @@ pub enum Progress {
 }
 
 enum Step {
-    Transfer(PreparedTransfer),
+    Transfer {
+        transfer: PreparedTransfer,
+        prepared: Option<(PreparedBooleanMasks, [OwnerMaskContribution; 2])>,
+    },
+    EarlyMasks {
+        source: NumberInput,
+        masks: PreparedBooleanMasks,
+    },
     Masks {
         number: TransferredNumber,
         masks: PreparedBooleanMasks,
@@ -118,25 +126,27 @@ impl ComparisonEngine {
             native_inputs: [x.binding().native_digest(), v.binding().native_digest()],
         };
         let session = CheckSession::new(context, source, target)?;
-        let transfer = session.prepare_number_transfer(&x)?;
-        let challenge = artifacts.write(transfer.challenge().encoded().as_bytes())?;
-        let request = artifacts.write_json(&Request::Number {
-            context: record.clone(),
-            challenge,
-            reference: transfer.challenge().id(),
-        })?;
-
-        Ok((
-            Self {
-                artifacts,
-                context: record,
-                session,
-                target: v,
-                target_evaluation,
-                step: Some(Step::Transfer(transfer)),
-            },
-            Progress::Waiting(request),
-        ))
+        let mut engine = Self {
+            artifacts,
+            context: record,
+            session,
+            target: v,
+            target_evaluation,
+            step: None,
+        };
+        let progress = if engine.context.manifest.release_at_ms.is_some() {
+            let masks = engine.session.prepare_boolean_masks()?;
+            let request = Request::Masks {
+                context: engine.context.clone(),
+                base: masks.commitment(),
+            };
+            engine.step = Some(Step::EarlyMasks { source: x, masks });
+            engine.wait(request)?
+        } else {
+            let transfer = engine.session.prepare_number_transfer(&x)?;
+            engine.request_transfer(transfer, None)?
+        };
+        Ok((engine, progress))
     }
 
     pub fn advance(&mut self, response: Response) -> Result<Progress> {
@@ -145,7 +155,7 @@ impl ComparisonEngine {
         let context_id = expected.id();
         match (step, response) {
             (
-                Step::Transfer(transfer),
+                Step::Transfer { transfer, prepared },
                 Response::Number {
                     context,
                     challenge,
@@ -164,6 +174,9 @@ impl ComparisonEngine {
                     &self.target_evaluation,
                 )?;
                 let number = self.session.finish_number_transfer(transfer, response)?;
+                if let Some((masks, contributions)) = prepared {
+                    return self.compare(number, masks, contributions);
+                }
                 let masks = self.session.prepare_boolean_masks()?;
                 let request = Request::Masks {
                     context: self.context.clone(),
@@ -173,6 +186,26 @@ impl ComparisonEngine {
                 self.wait(request)
             }
             (
+                Step::EarlyMasks { source, masks },
+                Response::Masks {
+                    context,
+                    base,
+                    contributions,
+                },
+            ) if context == context_id && base == masks.commitment() => {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| Error::Response)?
+                    .as_millis();
+                let release = self.context.manifest.release_at_ms.ok_or(Error::Response)?;
+                if release < 0 || now < release as u128 {
+                    return Err(Error::Response);
+                }
+                let contributions = self.import_contributions(context, base, &contributions)?;
+                let transfer = self.session.prepare_number_transfer(&source)?;
+                self.request_transfer(transfer, Some((masks, contributions)))
+            }
+            (
                 Step::Masks { number, masks },
                 Response::Masks {
                     context,
@@ -180,44 +213,8 @@ impl ComparisonEngine {
                     contributions,
                 },
             ) if context == context_id && base == masks.commitment() => {
-                let first = OwnerMaskContribution::import(
-                    contributions[0].binding(context, base)?,
-                    &self
-                        .artifacts
-                        .read(&contributions[0].ciphertext, CIPHERTEXT_LIMIT)?,
-                    contributions[0].ciphertext.digest,
-                    expected,
-                    base,
-                    &self.target_evaluation,
-                )?;
-                let second = OwnerMaskContribution::import(
-                    contributions[1].binding(context, base)?,
-                    &self
-                        .artifacts
-                        .read(&contributions[1].ciphertext, CIPHERTEXT_LIMIT)?,
-                    contributions[1].ciphertext.digest,
-                    expected,
-                    base,
-                    &self.target_evaluation,
-                )?;
-                let comparison = self.session.compare_protected(
-                    &number,
-                    &self.target,
-                    masks,
-                    &first,
-                    &second,
-                )?;
-                let challenge = self
-                    .artifacts
-                    .write(comparison.challenge().encoded().as_bytes())?;
-                let request = Request::AnswerCommitment {
-                    context: self.context.clone(),
-                    base,
-                    challenge,
-                    reference: comparison.challenge().id(),
-                };
-                self.step = Some(Step::Commitment(comparison));
-                self.wait(request)
+                let contributions = self.import_contributions(context, base, &contributions)?;
+                self.compare(number, masks, contributions)
             }
             (
                 Step::Commitment(comparison),
@@ -314,5 +311,68 @@ impl ComparisonEngine {
 
     fn wait(&self, request: Request) -> Result<Progress> {
         Ok(Progress::Waiting(self.artifacts.write_json(&request)?))
+    }
+
+    fn request_transfer(
+        &mut self,
+        transfer: PreparedTransfer,
+        prepared: Option<(PreparedBooleanMasks, [OwnerMaskContribution; 2])>,
+    ) -> Result<Progress> {
+        let challenge = self
+            .artifacts
+            .write(transfer.challenge().encoded().as_bytes())?;
+        let request = Request::Number {
+            context: self.context.clone(),
+            challenge,
+            reference: transfer.challenge().id(),
+        };
+        self.step = Some(Step::Transfer { transfer, prepared });
+        self.wait(request)
+    }
+
+    fn import_contributions(
+        &self,
+        context: [u8; 32],
+        base: [u8; 32],
+        contributions: &[Contribution; 2],
+    ) -> Result<[OwnerMaskContribution; 2]> {
+        let import = |value: &Contribution| -> Result<OwnerMaskContribution> {
+            Ok(OwnerMaskContribution::import(
+                value.binding(context, base)?,
+                &self.artifacts.read(&value.ciphertext, CIPHERTEXT_LIMIT)?,
+                value.ciphertext.digest,
+                self.session.context(),
+                base,
+                &self.target_evaluation,
+            )?)
+        };
+        Ok([import(&contributions[0])?, import(&contributions[1])?])
+    }
+
+    fn compare(
+        &mut self,
+        number: TransferredNumber,
+        masks: PreparedBooleanMasks,
+        contributions: [OwnerMaskContribution; 2],
+    ) -> Result<Progress> {
+        let base = masks.commitment();
+        let comparison = self.session.compare_protected(
+            &number,
+            &self.target,
+            masks,
+            &contributions[0],
+            &contributions[1],
+        )?;
+        let challenge = self
+            .artifacts
+            .write(comparison.challenge().encoded().as_bytes())?;
+        let request = Request::AnswerCommitment {
+            context: self.context.clone(),
+            base,
+            challenge,
+            reference: comparison.challenge().id(),
+        };
+        self.step = Some(Step::Commitment(comparison));
+        self.wait(request)
     }
 }

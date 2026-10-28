@@ -86,12 +86,14 @@ export function BidForm({
           </p>
           <p>
             You have one immutable bid. You may withdraw, but cannot bid again.
-            You must approve requests in Messages within your shared 10-minute
-            budget.
+            Requests can arrive in Messages immediately. Required availability
+            begins one hour before bidding closes; your 10-minute response
+            budget is shared across the auction.
           </p>
           <p>
-            Prices are in ZEC. No funds are collected; the seller confirms
-            completion with payment unverified.
+            {auction.execution === "localnet_custody"
+              ? "If selected, you will separately approve the ZEC payment. This bid does not send funds."
+              : "Prices are in ZEC. No funds are collected; the seller confirms completion with payment unverified."}
           </p>
           {error && <ErrorNotice>{error}</ErrorNotice>}
           <div className="dialog-actions">

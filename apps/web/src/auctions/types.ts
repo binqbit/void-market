@@ -31,6 +31,7 @@ export interface Auction {
   payment?: { expected: string; paid: string; remaining: string } | null;
   wallet_ready: boolean;
   closes_at_ms: number;
+  required_from_ms?: number;
   created_at_ms: number;
   published_at_ms: number | null;
   finished_at_ms: number | null;

@@ -46,6 +46,7 @@ fn proof_required_does_not_import_keys_or_start_a_challenge() {
         evaluation_key: missing.clone(),
     };
     let manifest = CheckManifest {
+        release_at_ms: None,
         schema_version: 1,
         assurance: Assurance::ProofRequired,
         external_context: [0; 32],

@@ -99,7 +99,19 @@ pub async fn exclude(
         .await;
     }
 
-    cancel_checks(connection, auction).await?;
+    let affected: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT s.id FROM approval_sessions s LEFT JOIN auction_checks c ON c.session_id=s.id
+         WHERE s.auction_id=$1 AND (NOT c.precomputed OR EXISTS(
+             SELECT 1 FROM approval_members m WHERE m.session_id=s.id AND m.account_id=$2))
+         AND s.status IN ('initializing','active') ORDER BY s.id FOR UPDATE OF s",
+    )
+    .bind(auction)
+    .bind(account)
+    .fetch_all(&mut *connection)
+    .await?;
+    for session in affected {
+        messages::interrupt_check(connection, session).await?;
+    }
     let members = repository::participants(connection, auction).await?;
     let survivors: Vec<_> = members
         .iter()
@@ -151,6 +163,26 @@ pub async fn exclude(
         .bind(auction)
         .bind(generation)
         .bind(root)
+        .execute(&mut *connection)
+        .await?;
+        // Exact surviving pairs keep their inputs, commitments and approvals.
+        sqlx::query(
+            "UPDATE auction_checks c SET generation=$2,round_root=a.round_root
+             FROM auctions a,auction_participants l,auction_participants r
+             WHERE c.auction_id=$1 AND a.id=c.auction_id AND c.precomputed
+             AND l.auction_id=a.id AND l.account_id=c.left_account AND l.status='active'
+             AND r.auction_id=a.id AND r.account_id=c.right_account AND r.status='active'",
+        )
+        .bind(auction)
+        .bind(generation)
+        .execute(&mut *connection)
+        .await?;
+        sqlx::query(
+            "UPDATE approval_sessions s SET round_generation=$2
+             FROM auction_checks c WHERE c.session_id=s.id AND c.auction_id=$1 AND c.generation=$2",
+        )
+        .bind(auction)
+        .bind(generation)
         .execute(&mut *connection)
         .await?;
     } else {

@@ -43,6 +43,9 @@ pub struct CheckManifest {
     pub comparison: Predicate,
     pub keys: [KeyMaterial; 2],
     pub inputs: [ArtifactRef; 2],
+    /// Auction preparation may collect masks early; decryption remains gated until close.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_at_ms: Option<i64>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

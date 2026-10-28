@@ -104,6 +104,7 @@ struct SessionPreparation {
     comparison: String,
     width: i16,
     scope_hash: Option<Vec<u8>>,
+    release_at_ms: Option<i64>,
 }
 
 async fn prepare_session(state: &AppState) -> Result<bool> {
@@ -120,23 +121,21 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
     }
 
     let row: Option<SessionPreparation> = sqlx::query_as(
-        "SELECT s.id, s.node_id, s.comparison, s.width, s.scope_hash FROM approval_sessions s WHERE
+        "SELECT s.id, s.node_id, s.comparison, s.width, s.scope_hash,
+         CASE WHEN c.precomputed THEN a.closes_at_ms END AS release_at_ms
+         FROM approval_sessions s LEFT JOIN auction_checks c ON c.session_id=s.id
+         LEFT JOIN auctions a ON a.id=s.auction_id WHERE
          s.status='initializing' AND NOT EXISTS(SELECT 1 FROM approval_members m JOIN
          custody_keys k ON k.account_id=m.account_id WHERE m.session_id=s.id AND
          k.he_status<>'ready') ORDER BY s.created_at LIMIT 1",
     )
     .fetch_optional(&state.pool)
     .await?;
-    let Some(SessionPreparation {
-        id: session,
-        node_id: node,
-        comparison: predicate,
-        width,
-        scope_hash: scope,
-    }) = row
-    else {
+    let Some(preparation) = row else {
         return Ok(false);
     };
+    let session = preparation.id;
+    let node = preparation.node_id;
     let members: Vec<InputRecord> = sqlx::query_as(
         "SELECT account_id, input_sealed, input_ref FROM approval_members
          WHERE session_id=$1 ORDER BY position",
@@ -151,19 +150,9 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
         input_material(state, &members[0]).await?,
         input_material(state, &members[1]).await?,
     ];
-    let comparison: Predicate =
-        serde_json::from_value(json!(predicate)).map_err(|_| ApiError::Internal)?;
     let custody = state.custody.as_ref().ok_or(ApiError::Unavailable)?.clone();
     let manifest = tokio::task::spawn_blocking(move || {
-        prepare_manifest(
-            custody,
-            session,
-            members,
-            material,
-            width as u8,
-            comparison,
-            scope,
-        )
+        prepare_manifest(custody, preparation, members, material)
     })
     .await
     .map_err(|_| ApiError::Internal)??;
@@ -223,13 +212,14 @@ async fn input_material(state: &AppState, input: &InputRecord) -> Result<KeyMate
 
 fn prepare_manifest(
     custody: Arc<crate::custody::Custody>,
-    session: Uuid,
+    preparation: SessionPreparation,
     members: Vec<InputRecord>,
     material: [KeyMaterial; 2],
-    width: u8,
-    comparison: Predicate,
-    scope: Option<Vec<u8>>,
 ) -> Result<ArtifactRef> {
+    let session = preparation.id;
+    let width = preparation.width as u8;
+    let comparison: Predicate =
+        serde_json::from_value(json!(preparation.comparison)).map_err(|_| ApiError::Internal)?;
     let mut inputs = Vec::new();
     for (index, member) in members.iter().enumerate() {
         if let Some(value) = &member.input_ref {
@@ -280,7 +270,7 @@ fn prepare_manifest(
     let manifest = CheckManifest {
         schema_version: 1,
         assurance: Assurance::HonestRoleMechanics,
-        external_context: match scope {
+        external_context: match preparation.scope_hash {
             Some(scope) => scope
                 .as_slice()
                 .try_into()
@@ -292,6 +282,7 @@ fn prepare_manifest(
         comparison,
         keys: material,
         inputs: inputs.try_into().map_err(|_| ApiError::Internal)?,
+        release_at_ms: preparation.release_at_ms,
     };
     custody
         .artifacts
@@ -365,6 +356,13 @@ async fn process_one(state: &AppState) -> Result<bool> {
 }
 
 async fn execute(state: &AppState, row: &Claimed) -> Result<operations::Output> {
+    let mut connection = state.pool.acquire().await?;
+    if row.kind != "mask_contribution"
+        && !super::protocol::release_allowed(&mut connection, row.session_id).await?
+    {
+        return Err(ApiError::Conflict("Auction inputs are not frozen"));
+    }
+    drop(connection);
     let custody = state.custody.as_ref().ok_or(ApiError::Unavailable)?.clone();
     let reference: ArtifactRef =
         serde_json::from_value(row.request_ref.clone()).map_err(|_| ApiError::Internal)?;

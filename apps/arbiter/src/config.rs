@@ -18,6 +18,7 @@ pub struct Config {
     pub signing_key: SigningKey,
     pub token: String,
     pub capacity: usize,
+    pub session_capacity: usize,
     pub allow_unverified_mechanics: bool,
 }
 
@@ -77,6 +78,13 @@ impl Config {
         if !(1..=4).contains(&capacity) || token.len() < 32 || token.len() > 256 {
             return Err(Error::Configuration);
         }
+        let session_capacity = env::var("SESSION_CAPACITY")
+            .unwrap_or_else(|_| "8".to_owned())
+            .parse::<usize>()
+            .map_err(|_| Error::Configuration)?;
+        if !(capacity..=64).contains(&session_capacity) {
+            return Err(Error::Configuration);
+        }
         Ok(Self {
             node_id: Uuid::parse_str(&required("NODE_ID")?).map_err(|_| Error::Configuration)?,
             deployment_id: Uuid::parse_str(&required("DEPLOYMENT_ID")?)
@@ -92,6 +100,7 @@ impl Config {
             signing_key: SigningKey::from_bytes(&key),
             token,
             capacity,
+            session_capacity,
             allow_unverified_mechanics: demo,
         })
     }

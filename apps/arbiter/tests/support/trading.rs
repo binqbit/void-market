@@ -22,6 +22,7 @@ pub struct Trading {
     schemas: [String; 2],
     root: PathBuf,
     stop: watch::Sender<bool>,
+    node_stop: watch::Sender<bool>,
     node: JoinHandle<arbiter::error::Result<()>>,
     worker: JoinHandle<()>,
     server: ServerHandle,
@@ -145,6 +146,7 @@ impl Trading {
         let server = http.handle();
         let http = tokio::spawn(http);
         let (stop, signal) = watch::channel(false);
+        let (node_stop, node_signal) = watch::channel(false);
         let worker_state = state.clone();
         let worker_signal = signal.clone();
         let worker = tokio::spawn(async move {
@@ -162,9 +164,10 @@ impl Trading {
                 signing_key: key,
                 token: "fixture-trading-node-service-token-0123456789".into(),
                 capacity: 1,
+                session_capacity: 8,
                 allow_unverified_mechanics: true,
             },
-            signal,
+            node_signal,
         ));
         let fixture = Self {
             state,
@@ -176,6 +179,7 @@ impl Trading {
             schemas,
             root,
             stop,
+            node_stop,
             node,
             worker,
             server,
@@ -233,8 +237,9 @@ impl Trading {
     }
 
     pub async fn close(self) {
-        self.stop.send(true).unwrap();
+        self.node_stop.send(true).unwrap();
         self.node.await.unwrap().unwrap();
+        self.stop.send(true).unwrap();
         self.worker.await.unwrap();
         self.server.stop(true).await;
         self.http.await.unwrap().unwrap();

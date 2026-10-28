@@ -72,8 +72,14 @@ async fn registration(
 ) -> Result<HttpResponse> {
     let actor = authentication::authorize(&state, &request, &body, first).await?;
     let input: Registration = parse(&body)?;
+    let session_capacity = if input.session_capacity == 0 {
+        input.capacity
+    } else {
+        input.session_capacity
+    };
     if input.instance_id != actor.request.instance_id
         || !(1..=4).contains(&input.capacity)
+        || !(input.capacity..=64).contains(&session_capacity)
         || input.sequence <= 0
     {
         return Err(ApiError::BadRequest("Invalid node registration"));
@@ -84,7 +90,7 @@ async fn registration(
     }
     let changed = sqlx::query(
         "UPDATE arbiter_nodes
-         SET instance_id=$2, capacity=$3, heartbeat_sequence=$4,
+         SET instance_id=$2, capacity=$3, heartbeat_sequence=$4, session_capacity=$5,
          heartbeat_until=now()+interval '90 seconds'
          WHERE id=$1
          AND (instance_id IS NULL OR instance_id=$2)
@@ -95,6 +101,10 @@ async fn registration(
     .bind(input.instance_id)
     .bind(i16::try_from(input.capacity).map_err(|_| ApiError::BadRequest("Invalid capacity"))?)
     .bind(input.sequence)
+    .bind(
+        i16::try_from(session_capacity)
+            .map_err(|_| ApiError::BadRequest("Invalid session capacity"))?,
+    )
     .execute(&mut *tx)
     .await?;
     if changed.rows_affected() != 1 {
@@ -164,7 +174,7 @@ async fn claim(
         return Ok(reply(response));
     }
     let capacity: Option<i16> = sqlx::query_scalar(
-        "SELECT capacity FROM arbiter_nodes
+        "SELECT session_capacity FROM arbiter_nodes
          WHERE id = $1 AND heartbeat_until > now() AND enabled FOR UPDATE",
     )
     .bind(actor.request.node_id)

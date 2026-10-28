@@ -148,6 +148,7 @@ async fn manual_user_approvals_complete_the_real_custodial_check() {
             signing_key: key,
             token: "test-only-node-service-token-0123456789".into(),
             capacity: 1,
+            session_capacity: 8,
             allow_unverified_mechanics: true,
         },
         signal,

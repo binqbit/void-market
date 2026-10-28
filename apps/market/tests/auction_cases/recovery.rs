@@ -51,7 +51,7 @@ async fn ready_obligation(
     }
     sqlx::query(
         "INSERT INTO approval_messages(id,session_id,account_id,request_id,request_ref,generation,kind)
-         VALUES($1,$2,$3,$4,$5,1,'number_transfer')",
+         VALUES($1,$2,$3,$4,$5,1,'mask_contribution')",
     )
     .bind(action)
     .bind(session)
@@ -145,6 +145,78 @@ async fn overlapping_ready_obligations_charge_one_shared_interval() {
             .await
             .unwrap();
     assert_eq!(other_status, "ready");
+    fixture.cleanup().await;
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn early_approval_does_not_start_the_budget_before_the_final_hour() {
+    let fixture = Fixture::with_custody().await;
+    let seller = fixture.register("Seller").await;
+    let buyer = fixture.register("Early buyer").await;
+    let asset = fixture.asset(&seller).await;
+    let (auction, _) = published(&fixture, &seller, asset).await;
+    admit(&fixture, auction, &buyer, 200_000_000).await;
+    let (_, action) = ready_obligation(&fixture, auction, &buyer, &seller).await;
+    let epoch = Uuid::new_v4();
+    let tick = now();
+    sqlx::query("INSERT INTO approval_runtime(singleton,instance_id,last_tick_ms,healthy) VALUES(TRUE,$1,$2,TRUE)")
+        .bind(epoch).bind(tick).execute(&fixture.state.pool).await.unwrap();
+    sqlx::query("UPDATE auctions SET closes_at_ms=$2,clock_epoch=$3,last_tick_ms=$4 WHERE id=$1")
+        .bind(auction)
+        .bind(tick + 7_200_000)
+        .bind(epoch)
+        .bind(tick - 1000)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    let snapshot = fixture
+        .request("GET", "/v1/messages", Some(&buyer.cookie), Value::Null)
+        .await
+        .2;
+    let request = &snapshot["messages"][0];
+    assert_eq!(request["timer_running"], false);
+    assert_eq!(request["required_from_ms"], tick + 3_600_000);
+    let approved = fixture
+        .request(
+            "POST",
+            &format!("/v1/messages/{action}/approve"),
+            Some(&buyer.cookie),
+            json!({"request_id":request["request_id"],"revision":request["revision"]}),
+        )
+        .await;
+    assert_eq!(approved.0, StatusCode::ACCEPTED, "{}", approved.2);
+    let (remaining, charging): (i64, bool) = sqlx::query_as(
+        "SELECT remaining_ms,chargeable FROM auction_participants WHERE auction_id=$1 AND account_id=$2",
+    ).bind(auction).bind(buyer.address).fetch_one(&fixture.state.pool).await.unwrap();
+    assert_eq!(remaining, 600_000);
+    assert!(!charging);
+
+    let (_, premature) = ready_obligation(&fixture, auction, &buyer, &seller).await;
+    sqlx::query("UPDATE approval_messages SET kind='number_transfer' WHERE id=$1")
+        .bind(premature)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    let snapshot = fixture
+        .request("GET", "/v1/messages", Some(&buyer.cookie), Value::Null)
+        .await
+        .2;
+    let request = snapshot["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message["id"] == premature.to_string())
+        .unwrap();
+    let blocked = fixture
+        .request(
+            "POST",
+            &format!("/v1/messages/{premature}/approve"),
+            Some(&buyer.cookie),
+            json!({"request_id":request["request_id"],"revision":request["revision"]}),
+        )
+        .await;
+    assert_eq!(blocked.0, StatusCode::CONFLICT);
     fixture.cleanup().await;
 }
 
@@ -314,7 +386,7 @@ async fn auction_expiry_cancels_the_round_without_resetting_other_participants()
     .unwrap();
     sqlx::query(
         "INSERT INTO approval_messages(id,session_id,account_id,request_id,request_ref,generation,kind)
-         VALUES($1,$2,$3,$4,$5,1,'number_transfer')",
+         VALUES($1,$2,$3,$4,$5,1,'mask_contribution')",
     )
     .bind(action)
     .bind(session)
@@ -361,6 +433,14 @@ async fn auction_expiry_cancels_the_round_without_resetting_other_participants()
     .execute(&fixture.state.pool)
     .await
     .unwrap();
+    let (surviving_session, surviving_action) =
+        ready_obligation(&fixture, auction, &other, &seller).await;
+    sqlx::query(
+        "INSERT INTO auction_checks(session_id,auction_id,generation,slot,kind,left_account,right_account,round_root,precomputed)
+         VALUES($1,$2,1,0,'reserve',$3,$4,$5,TRUE)",
+    )
+    .bind(surviving_session).bind(auction).bind(other.address).bind(seller.address)
+    .bind(vec![8u8; 32]).execute(&fixture.state.pool).await.unwrap();
     let snapshot = fixture
         .request("GET", "/v1/messages", Some(&buyer.cookie), Value::Null)
         .await
@@ -386,6 +466,15 @@ async fn auction_expiry_cancels_the_round_without_resetting_other_participants()
         .2;
     assert_eq!(current["generation"], 2);
     assert_eq!(current["participation"]["remaining_ms"], 123456);
+    let surviving: (String, i64) = sqlx::query_as(
+        "SELECT m.status,c.generation FROM approval_messages m JOIN auction_checks c
+         ON c.session_id=m.session_id WHERE m.id=$1",
+    )
+    .bind(surviving_action)
+    .fetch_one(&fixture.state.pool)
+    .await
+    .unwrap();
+    assert_eq!(surviving, ("ready".to_owned(), 2));
     let expired = fixture
         .request(
             "GET",

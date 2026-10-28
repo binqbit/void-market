@@ -122,6 +122,8 @@ struct MessageRow {
     last_tick_ms: Option<i64>,
     clock_healthy: bool,
     approval: Option<Value>,
+    precomputed: bool,
+    closes_at_ms: Option<i64>,
 }
 
 pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
@@ -134,12 +136,14 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          COALESCE(p.chargeable,m.chargeable) AS chargeable,
          COALESCE(x.last_tick_ms,s.last_tick_ms) AS last_tick_ms, COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
-         n.enabled AND n.heartbeat_until>now(), FALSE) AS clock_healthy, a.approval FROM
+         n.enabled AND n.heartbeat_until>now(), FALSE) AS clock_healthy, a.approval,
+         COALESCE(c.precomputed,FALSE) AS precomputed,x.closes_at_ms FROM
          approval_messages a JOIN approval_sessions s ON s.id=a.session_id JOIN
          approval_members m ON m.session_id=s.id AND m.account_id=a.account_id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
          LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
          ON p.auction_id=x.id AND p.account_id=a.account_id
+         LEFT JOIN auction_checks c ON c.session_id=s.id
          WHERE a.account_id=$1 ORDER BY CASE WHEN a.status='ready' THEN 0 ELSE 1 END,
          a.created_at DESC, a.id LIMIT 100",
     )
@@ -161,6 +165,13 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
         };
         let stage: ActionKind =
             serde_json::from_value(json!(row.kind)).map_err(|_| ApiError::Internal)?;
+        let step = match (row.precomputed, stage) {
+            (true, ActionKind::MaskContribution) | (false, ActionKind::NumberTransfer) => 1,
+            (true, ActionKind::NumberTransfer) | (false, ActionKind::MaskContribution) => 2,
+            (_, ActionKind::AnswerCommitment) => 3,
+            (_, ActionKind::AnswerReveal) => 4,
+            (_, ActionKind::MaskOpening) => 5,
+        };
         messages.push(Message {
             id: row.id,
             session_id: row.session_id,
@@ -170,6 +181,11 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
             request_id: row.request_id,
             revision: row.revision,
             stage,
+            step,
+            required_from_ms: row
+                .closes_at_ms
+                .map(|close| close.saturating_sub(crate::auctions::REQUIRED_WINDOW_MS)),
+            closes_at_ms: row.closes_at_ms,
             status: row.status,
             participant_status: row.participant_status,
             session_status: row.session_status,
@@ -194,7 +210,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
          (COALESCE(p.chargeable,m.chargeable) AND COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
-         n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running FROM
+         n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running,
+         CASE WHEN x.status='open' AND s.response_ref IS NOT NULL THEN x.closes_at_ms END AS waiting_until_ms FROM
          approval_sessions s JOIN approval_members m ON m.session_id=s.id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
          LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
@@ -281,6 +298,15 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
     if revision != input.revision || status != "ready" {
         return Err(ApiError::Conflict(
             "This message is no longer available for approval",
+        ));
+    }
+    let kind: String = sqlx::query_scalar("SELECT kind FROM approval_messages WHERE id=$1")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
+    if kind != "mask_contribution" && !super::protocol::release_allowed(&mut tx, session).await? {
+        return Err(ApiError::Conflict(
+            "Wait for bidding to close before this action",
         ));
     }
     let now = clock::now_ms()?;

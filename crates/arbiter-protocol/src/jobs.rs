@@ -15,6 +15,9 @@ pub struct ArtifactRef {
 pub struct Registration {
     pub instance_id: Uuid,
     pub capacity: u16,
+    /// Maximum retained sessions, including sessions waiting for a human response.
+    #[serde(default)]
+    pub session_capacity: u16,
     pub sequence: i64,
 }
 

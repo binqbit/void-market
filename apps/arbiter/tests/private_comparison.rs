@@ -4,7 +4,11 @@ use arbiter::{
     artifacts::Artifacts,
     crypto::{ComparisonEngine, Predicate, Progress, Request, Response},
 };
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tfhe_math::{KeySet, MathParameters, Width};
 use uuid::Uuid;
 
@@ -21,9 +25,14 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
         KeySet::generate(MathParameters).unwrap(),
     ];
     let prepared = support::prepare(&store, &keys, [42, 17], Width::U8, Predicate::Greater);
-    for (comparison, expected) in [(Predicate::Greater, true), (Predicate::Less, false)] {
+    for (comparison, expected, release_at) in [
+        (Predicate::Greater, true, None),
+        (Predicate::Less, false, None),
+        (Predicate::Greater, true, Some(0)),
+    ] {
         let mut manifest = prepared.clone();
         manifest.comparison = comparison;
+        manifest.release_at_ms = release_at;
         let (mut engine, mut progress) = ComparisonEngine::start(store.clone(), manifest).unwrap();
         let mut participants = support::Participants::new(&keys, store.clone());
         let mut steps = 0;
@@ -44,6 +53,29 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
             }
         }
     }
+
+    let mut guarded = prepared.clone();
+    guarded.release_at_ms = Some(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64
+            + 60_000,
+    );
+    let (mut guarded_engine, Progress::Waiting(reference)) =
+        ComparisonEngine::start(store.clone(), guarded).unwrap()
+    else {
+        panic!("An auction must request early masks before requesting decryption");
+    };
+    let request: Request = store.record(&reference).unwrap();
+    assert!(matches!(request, Request::Masks { .. }));
+    let mut participants = support::Participants::new(&keys, store.clone());
+    assert!(
+        guarded_engine
+            .advance(participants.respond(request))
+            .is_err(),
+        "The node must reject a premature transition to number decryption"
+    );
 
     let (mut engine, progress) = ComparisonEngine::start(store.clone(), prepared).unwrap();
     assert!(matches!(progress, Progress::Waiting(_)));

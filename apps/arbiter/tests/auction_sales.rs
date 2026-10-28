@@ -237,6 +237,10 @@ async fn native_withdrawal_fences_old_actions_and_preserves_survivor_inputs() {
     }
     let old = tokio::time::timeout(Duration::from_secs(180), async {
         loop {
+            if fixture.get(Some(0), &detail).await["status"] != "matching" {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                continue;
+            }
             let snapshot = fixture.get(Some(2), "/v1/messages").await;
             if let Some(request) = snapshot["messages"]
                 .as_array()
@@ -255,6 +259,9 @@ async fn native_withdrawal_fences_old_actions_and_preserves_survivor_inputs() {
     })
     .await
     .expect("later buyer must receive the exact first obligation");
+    let budget_before = fixture.get(Some(1), &detail).await["participation"]["remaining_ms"]
+        .as_i64()
+        .unwrap();
     let original: Vec<u8> = sqlx::query_scalar("SELECT input_root FROM auctions WHERE id=$1")
         .bind(auction)
         .fetch_one(&fixture.state.pool)
@@ -276,7 +283,7 @@ async fn native_withdrawal_fences_old_actions_and_preserves_survivor_inputs() {
     let survivor = fixture.get(Some(1), &detail).await;
     assert_eq!(survivor["generation"], 2);
     assert_eq!(survivor["your_bid"], "0.00000042");
-    assert_eq!(survivor["participation"]["remaining_ms"], 600000);
+    assert!(survivor["participation"]["remaining_ms"].as_i64().unwrap() <= budget_before);
     approve_until(&fixture, auction, "awaiting_completion").await;
     let awarded = fixture.get(Some(0), &detail).await;
     assert_eq!(

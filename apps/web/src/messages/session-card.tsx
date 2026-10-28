@@ -29,7 +29,9 @@ export function SessionCard({
             ? "Session interrupted — no disqualification"
             : item.status === "initializing"
               ? "Preparing your development wallet"
-              : "Waiting for the arbiter or another participant";
+              : item.waiting_until_ms
+                ? `Waiting for bidding to close at ${new Date(item.waiting_until_ms).toLocaleString()}`
+                : "Waiting for the arbiter or another participant";
 
   async function withdraw() {
     setBusy(true);

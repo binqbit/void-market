@@ -81,7 +81,11 @@ pub async fn serve_until(config: Config, stop_rx: watch::Receiver<bool>) -> Resu
         .await?;
     let gateway = Gateway::new(&config, instance)?;
     gateway
-        .register(config.capacity, repository.sequence().await?)
+        .register(
+            config.capacity,
+            config.session_capacity,
+            repository.sequence().await?,
+        )
         .await?;
     let artifacts = Artifacts::open(&config.artifacts)?;
     let ready_flag = Arc::new(AtomicBool::new(false));
@@ -106,7 +110,10 @@ pub async fn serve_until(config: Config, stop_rx: watch::Receiver<bool>) -> Resu
         repository,
         gateway,
         artifacts,
-        config.capacity,
+        Capacity {
+            computations: config.capacity,
+            sessions: config.session_capacity,
+        },
         config.allow_unverified_mechanics,
         ready_flag.clone(),
         stop_rx,
@@ -120,18 +127,23 @@ pub async fn serve_until(config: Config, stop_rx: watch::Receiver<bool>) -> Resu
     result
 }
 
+struct Capacity {
+    computations: usize,
+    sessions: usize,
+}
+
 async fn coordinate(
     repository: Repository,
     gateway: Gateway,
     artifacts: Artifacts,
-    capacity: usize,
+    capacity: Capacity,
     allow_unverified_mechanics: bool,
     ready: Arc<AtomicBool>,
     mut stop: watch::Receiver<bool>,
 ) -> Result<()> {
     recover(&repository, &gateway).await?;
     ready.store(true, Ordering::Relaxed);
-    let semaphore = Arc::new(Semaphore::new(capacity));
+    let semaphore = Arc::new(Semaphore::new(capacity.computations));
     let (work_stop, work_signal) = watch::channel(false);
     let mut workers = JoinSet::new();
     let mut active = HashSet::new();
@@ -153,7 +165,7 @@ async fn coordinate(
                         break;
                     }
                 };
-                let result = gateway.heartbeat(capacity, sequence).await;
+                let result = gateway.heartbeat(capacity.computations, capacity.sessions, sequence).await;
                 control_lease_valid = result.is_ok();
                 ready.store(control_lease_valid, Ordering::Relaxed);
             }
@@ -191,7 +203,7 @@ async fn coordinate(
                 }
 
                 for candidate in jobs.into_iter().filter(|job| job.status == JobStatus::Queued) {
-                    if active.len() >= capacity {
+                    if active.len() >= capacity.sessions {
                         break;
                     }
                     if active.contains(&candidate.id) {

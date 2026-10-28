@@ -109,6 +109,12 @@ export function DraftEditor({
         >
           Save changes
         </button>
+        <p className="field-help">
+          Approval requests can arrive before bidding closes. Required
+          availability starts one hour before the closing time, with one shared
+          10-minute response budget. Waiting for others or the service pauses
+          it.
+        </p>
         <label className="auction-consent">
           <input
             type="checkbox"

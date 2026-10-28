@@ -123,6 +123,7 @@ impl Node {
         let input = Registration {
             instance_id: self.instance,
             capacity: 1,
+            session_capacity: 1,
             sequence: 1,
         };
         assert_eq!(
@@ -142,6 +143,7 @@ async fn node_authentication_is_separate_and_replays_are_bound() {
     let payload = serde_json::to_vec(&Registration {
         instance_id: node.instance,
         capacity: 1,
+        session_capacity: 1,
         sequence: 1,
     })
     .unwrap();

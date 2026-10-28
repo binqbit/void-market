@@ -19,7 +19,6 @@ use uuid::Uuid;
 #[derive(sqlx::FromRow)]
 struct Check {
     session_id: Uuid,
-    slot: i32,
     kind: String,
     left_account: Uuid,
     right_account: Uuid,
@@ -43,10 +42,9 @@ struct MechanicalResult {
 
 pub async fn advance_one(state: &AppState) -> Result<bool> {
     let ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM auctions WHERE (status='open' AND closes_at_ms<=$1) OR status='matching'
+        "SELECT id FROM auctions WHERE status IN ('open','matching')
          ORDER BY created_at_ms,id",
     )
-    .bind(messages::now_ms()?)
     .fetch_all(&state.pool)
     .await?;
     for id in ids {
@@ -55,7 +53,7 @@ pub async fn advance_one(state: &AppState) -> Result<bool> {
         let changed = if auction.status == "open" && auction.closes_at_ms <= messages::now_ms()? {
             freeze(&mut tx, &auction).await?;
             true
-        } else if auction.status == "matching" {
+        } else if matches!(auction.status.as_str(), "open" | "matching") {
             advance(state, &mut tx, &auction).await?
         } else {
             false
@@ -97,9 +95,14 @@ async fn freeze(connection: &mut PgConnection, auction: &AuctionRow) -> Result<(
     )
     .bind(auction.id)
     .bind(original)
-    .bind(root)
+    .bind(&root)
     .execute(&mut *connection)
     .await?;
+    sqlx::query("UPDATE auction_checks SET round_root=$2 WHERE auction_id=$1 AND generation=1")
+        .bind(auction.id)
+        .bind(&root)
+        .execute(&mut *connection)
+        .await?;
     events::record_node(
         connection,
         "auction.frozen",
@@ -119,6 +122,9 @@ async fn advance(
         .filter(|member| member.account_id != auction.seller_id && member.status == "active")
         .map(|member| member.account_id)
         .collect();
+    if buyers.is_empty() && auction.status == "open" {
+        return Ok(false);
+    }
     if buyers.is_empty() {
         participation::finish(
             connection,
@@ -133,24 +139,24 @@ async fn advance(
 
     let slots = matching::schedule(auction.seller_id, &buyers);
     let mut checks: Vec<Check> = sqlx::query_as(
-        "SELECT c.session_id,c.slot,c.kind,c.left_account,c.right_account,c.result,c.result_ref,
+        "SELECT c.session_id,c.kind,c.left_account,c.right_account,c.result,c.result_ref,
          s.status,j.output,s.check_context FROM auction_checks c JOIN approval_sessions s ON s.id=c.session_id
-         LEFT JOIN arbiter_jobs j ON j.id=s.job_id WHERE c.auction_id=$1 AND c.generation=$2 ORDER BY c.slot",
+         LEFT JOIN arbiter_jobs j ON j.id=s.job_id
+         JOIN auction_participants l ON l.auction_id=c.auction_id AND l.account_id=c.left_account
+         JOIN auction_participants r ON r.auction_id=c.auction_id AND r.account_id=c.right_account
+         WHERE c.auction_id=$1 AND c.generation=$2 AND l.status='active' AND r.status='active' ORDER BY c.slot",
     )
     .bind(auction.id)
-    .bind(auction.generation)
+    .bind(auction.generation.max(1))
     .fetch_all(&mut *connection)
     .await?;
     let mut changed = false;
-    for (position, check) in checks.iter_mut().enumerate() {
-        let Some(slot) = slots.get(position) else {
-            return interrupt(connection, auction.id, "inconsistent_transcript").await;
-        };
-        if check.slot != position as i32
-            || check.kind != slot.kind
-            || check.left_account != slot.left
-            || check.right_account != slot.right
-        {
+    for check in &mut checks {
+        if !slots.iter().any(|slot| {
+            check.kind == slot.kind
+                && check.left_account == slot.left
+                && check.right_account == slot.right
+        }) {
             return interrupt(connection, auction.id, "inconsistent_transcript").await;
         }
         if check.status == "interrupted" {
@@ -180,26 +186,54 @@ async fn advance(
     if changed {
         repository::touch(connection, auction.id).await?;
     }
-    if checks.iter().any(|check| check.result.is_none()) {
-        return Ok(changed);
+    let mut position: i32 = sqlx::query_scalar(
+        "SELECT COALESCE(max(slot),-1)+1 FROM auction_checks WHERE auction_id=$1 AND generation=$2",
+    )
+    .bind(auction.id)
+    .bind(auction.generation.max(1))
+    .fetch_one(&mut *connection)
+    .await?;
+    for slot in &slots {
+        if !checks.iter().any(|check| {
+            check.kind == slot.kind
+                && check.left_account == slot.left
+                && check.right_account == slot.right
+        }) {
+            schedule_check(connection, auction, &members, slot, position).await?;
+            position += 1;
+            changed = true;
+        }
     }
-
-    if checks.len() < slots.len() {
-        schedule_check(connection, auction, &members, &slots, checks.len()).await?;
-    } else {
-        award(connection, auction, &buyers, &checks).await?;
+    if auction.status == "matching" {
+        messages::release_auction_responses(connection, auction.id).await?;
+        if checks.len() == slots.len() && checks.iter().all(|check| check.result.is_some()) {
+            let ordered: Vec<&Check> = slots
+                .iter()
+                .map(|slot| {
+                    checks
+                        .iter()
+                        .find(|check| {
+                            check.kind == slot.kind
+                                && check.left_account == slot.left
+                                && check.right_account == slot.right
+                        })
+                        .ok_or(ApiError::Internal)
+                })
+                .collect::<Result<_>>()?;
+            award(connection, auction, &buyers, &ordered).await?;
+            return Ok(true);
+        }
     }
-    Ok(true)
+    Ok(changed)
 }
 
 async fn schedule_check(
     connection: &mut PgConnection,
     auction: &AuctionRow,
     members: &[Participant],
-    slots: &[matching::Slot],
-    position: usize,
+    slot: &matching::Slot,
+    position: i32,
 ) -> Result<()> {
-    let slot = &slots[position];
     let left = members
         .iter()
         .find(|member| member.account_id == slot.left)
@@ -209,16 +243,11 @@ async fn schedule_check(
         .find(|member| member.account_id == slot.right)
         .ok_or(ApiError::Internal)?;
     let id = Uuid::new_v4();
-    let root = auction.round_root.as_ref().ok_or(ApiError::Internal)?;
     let scope = inputs::digest(
-        "AUCTION_CHECK_V1",
+        "AUCTION_PAIR_V2",
         &(
             auction.id,
             &auction.policy_hash,
-            &auction.input_root,
-            root,
-            auction.generation,
-            position,
             slot.kind,
             left.id,
             right.id,
@@ -231,17 +260,15 @@ async fn schedule_check(
         BoundCheck {
             id,
             auction: auction.id,
-            generation: auction.generation,
+            generation: auction.generation.max(1),
             title: format!(
-                "{} · {} check {} of {}",
+                "{} · {} check",
                 auction.asset_snapshot["name"].as_str().unwrap_or("Auction"),
                 if slot.kind == "reserve" {
                     "reserve"
                 } else {
                     "bid"
                 },
-                position + 1,
-                slots.len()
             ),
             node: auction.node_id.ok_or(ApiError::Internal)?,
             width: auction.width as u8,
@@ -258,16 +285,16 @@ async fn schedule_check(
     .await?;
     sqlx::query(
         "INSERT INTO auction_checks(session_id,auction_id,generation,slot,kind,left_account,
-            right_account,round_root) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+            right_account,round_root,precomputed) VALUES($1,$2,$3,$4,$5,$6,$7,$8,TRUE)",
     )
     .bind(id)
     .bind(auction.id)
-    .bind(auction.generation)
-    .bind(position as i32)
+    .bind(auction.generation.max(1))
+    .bind(position)
     .bind(slot.kind)
     .bind(slot.left)
     .bind(slot.right)
-    .bind(root)
+    .bind(&auction.round_root)
     .execute(&mut *connection)
     .await?;
     repository::touch(connection, auction.id).await
@@ -277,7 +304,7 @@ async fn award(
     connection: &mut PgConnection,
     auction: &AuctionRow,
     buyers: &[Uuid],
-    checks: &[Check],
+    checks: &[&Check],
 ) -> Result<()> {
     let values: Vec<bool> = checks
         .iter()

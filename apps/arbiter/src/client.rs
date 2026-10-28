@@ -108,24 +108,36 @@ impl Gateway {
         Ok(())
     }
 
-    pub async fn register(&self, capacity: usize, sequence: i64) -> Result<()> {
+    pub async fn register(
+        &self,
+        capacity: usize,
+        session_capacity: usize,
+        sequence: i64,
+    ) -> Result<()> {
         self.post(
             "/node/v1/register",
             &Registration {
                 instance_id: self.instance,
                 capacity: capacity as u16,
+                session_capacity: session_capacity as u16,
                 sequence,
             },
         )
         .await
     }
 
-    pub async fn heartbeat(&self, capacity: usize, sequence: i64) -> Result<()> {
+    pub async fn heartbeat(
+        &self,
+        capacity: usize,
+        session_capacity: usize,
+        sequence: i64,
+    ) -> Result<()> {
         self.post(
             "/node/v1/heartbeat",
             &Registration {
                 instance_id: self.instance,
                 capacity: capacity as u16,
+                session_capacity: session_capacity as u16,
                 sequence,
             },
         )

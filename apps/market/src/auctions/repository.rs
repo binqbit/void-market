@@ -121,11 +121,7 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         .iter()
         .filter(|member| member.status == "active")
         .count() as i64;
-    let checks_total = if auction.generation > 0 {
-        active_count * (active_count + 1) / 2
-    } else {
-        0
-    };
+    let checks_total = active_count * (active_count + 1) / 2;
 
     let own_amount = own
         .map(|member| inputs::amount(state, id, member))
@@ -204,6 +200,9 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         payment,
         wallet_ready,
         closes_at_ms: auction.closes_at_ms,
+        required_from_ms: auction
+            .closes_at_ms
+            .saturating_sub(super::clock::REQUIRED_WINDOW_MS),
         created_at_ms: auction.created_at_ms,
         published_at_ms: auction.published_at_ms,
         finished_at_ms: auction.finished_at_ms,

@@ -40,6 +40,9 @@ pub struct Message {
     pub request_id: Uuid,
     pub revision: i64,
     pub stage: ActionKind,
+    pub step: u8,
+    pub required_from_ms: Option<i64>,
+    pub closes_at_ms: Option<i64>,
     pub status: String,
     pub participant_status: String,
     pub session_status: String,
@@ -88,6 +91,7 @@ pub struct SessionSummary {
     pub participation_status: String,
     pub remaining_ms: i64,
     pub timer_running: bool,
+    pub waiting_until_ms: Option<i64>,
 }
 
 pub(crate) struct BoundCheck {

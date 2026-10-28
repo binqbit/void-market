@@ -96,6 +96,31 @@ export function AuctionPage() {
                 Your bid <strong>{auction.your_bid} ZEC</strong>
               </p>
             )}
+            {auction.status === "open" && (
+              <>
+                <p>
+                  Approval requests can arrive as bids are admitted. You can
+                  approve them now; required availability begins at{" "}
+                  <strong>
+                    {new Date(
+                      auction.required_from_ms ??
+                        auction.closes_at_ms - 3600000,
+                    ).toLocaleString()}
+                  </strong>
+                  .
+                </p>
+                <p>
+                  During the final hour and final checks, your shared 10-minute
+                  budget runs only while a response is needed from you. The
+                  timer pauses while you wait for others or the service.
+                </p>
+                {own?.status === "active" && (
+                  <Link className="button" to="/messages">
+                    Open Messages
+                  </Link>
+                )}
+              </>
+            )}
             {own?.status === "withdrawn" && (
               <p className="notice">
                 You withdrew. You cannot bid again in this auction.
@@ -230,8 +255,9 @@ export function AuctionPage() {
                 does not free a place.
               </li>
               <li>
-                You have 10 minutes total for your required approvals across the
-                auction. Service waits pause the budget.
+                Prepare approvals at any time. From one hour before bidding
+                closes, you have 10 minutes total for required responses across
+                the auction. Service and dependency waits pause the budget.
               </li>
               <li>
                 {native

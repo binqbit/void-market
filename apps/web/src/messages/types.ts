@@ -16,6 +16,9 @@ export interface ApprovalMessage {
   request_id: string;
   revision: number;
   stage: ApprovalStage;
+  step?: number;
+  required_from_ms?: number | null;
+  closes_at_ms?: number | null;
   status: string;
   participant_status: "active" | "withdrawn" | "disqualified";
   session_status: string;
@@ -41,6 +44,7 @@ export interface MessageSnapshot {
     participation_status: string;
     remaining_ms: number;
     timer_running: boolean;
+    waiting_until_ms?: number | null;
   }[];
 }
 

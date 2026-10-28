@@ -205,6 +205,7 @@ pub(crate) fn prepare(
     .each_ref()
     .map(|input| store.write(input.encoded().as_bytes()).unwrap());
     CheckManifest {
+        release_at_ms: None,
         schema_version: 1,
         assurance: Assurance::HonestRoleMechanics,
         external_context: [1; 32],

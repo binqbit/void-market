@@ -25,6 +25,7 @@ x-arbiter: &arbiter
     SERVICE_TOKEN_FILE: /run/secrets/arbiter_service_token
     ARTIFACT_ROOT: /var/lib/arbiter/artifacts
     CAPACITY: "1"
+    SESSION_CAPACITY: "8"
     RUST_LOG: info
   secrets:
     - source: arbiter_database_password

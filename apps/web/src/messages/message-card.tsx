@@ -23,6 +23,10 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
   const [anchor, setAnchor] = useState(() => performance.now());
   const [elapsed, setElapsed] = useState(0);
   const stage = stages[item.stage];
+  const early =
+    item.required_from_ms != null && Date.now() < item.required_from_ms;
+  const biddingOpen =
+    item.closes_at_ms != null && Date.now() < item.closes_at_ms;
   const actionable =
     item.status === "ready" &&
     item.participant_status === "active" &&
@@ -83,7 +87,9 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
         : ((
             {
               completed: "Completed",
-              responded: "Waiting for the arbiter",
+              responded: biddingOpen
+                ? "Prepared — waiting for bidding to close"
+                : "Waiting for the arbiter",
               approved: "Approved — processing",
               queued: "Approved — processing",
               processing: "Approved — processing",
@@ -97,7 +103,9 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
     <article className={`message-card ${actionable ? "needs-approval" : ""}`}>
       <div className="message-topline">
         <span className="eyebrow">{item.session_title}</span>
-        <span className="message-stage">Step {stage.step} of 5</span>
+        <span className="message-stage">
+          Step {item.step ?? stage.step} of 5
+        </span>
       </div>
       {item.auction_id && (
         <Link className="text-link" to={`/market/${item.auction_id}`}>
@@ -122,14 +130,19 @@ export function MessageCard({ item }: { item: ApprovalMessage }) {
             <strong>
               {connectionError ? "Reconnecting…" : formatTime(left)}
             </strong>
-            <span>approval time left in this session</span>
+            <span>
+              approval time left in{" "}
+              {item.auction_id ? "this auction" : "this session"}
+            </span>
           </div>
           <p className="message-caption">
             {connectionError
               ? "Connection lost. Remaining time will be confirmed when you reconnect."
-              : item.timer_running
-                ? "Time is shared across all your approval steps. When it runs out, you are disqualified from this session."
-                : "Timer paused while the service is waiting. Your remaining time is preserved."}
+              : early
+                ? `You can approve now. Your timer starts only when a response is needed from ${new Date(item.required_from_ms!).toLocaleString()}.`
+                : item.timer_running
+                  ? "Time is shared across all your approval steps. When it runs out, you are disqualified from this session."
+                  : "Timer paused while the service is waiting. Your remaining time is preserved."}
           </p>
           <div className="message-actions">
             <button

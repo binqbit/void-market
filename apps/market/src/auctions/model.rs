@@ -132,6 +132,7 @@ pub struct AuctionView {
     pub wallet_ready: bool,
     pub closes_at_ms: i64,
     pub created_at_ms: i64,
+    pub required_from_ms: i64,
     pub published_at_ms: Option<i64>,
     pub finished_at_ms: Option<i64>,
     pub revision: i64,

@@ -67,6 +67,7 @@ fn node_config(
         signing_key: key,
         token: "test-only-registered-service-token-123456".to_owned(),
         capacity: 1,
+        session_capacity: 8,
         allow_unverified_mechanics: true,
     }
 }
@@ -208,6 +209,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
         evaluation_key: missing.clone(),
     };
     let manifest = CheckManifest {
+        release_at_ms: None,
         schema_version: 1,
         assurance: Assurance::ProofRequired,
         external_context: [0; 32],

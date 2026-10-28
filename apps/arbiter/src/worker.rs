@@ -14,13 +14,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, watch};
+use tokio::sync::{Semaphore, watch};
 use uuid::Uuid;
-
-struct RunningCheck {
-    engine: ComparisonEngine,
-    _permit: OwnedSemaphorePermit,
-}
 
 pub(crate) struct Worker {
     pub repository: Repository,
@@ -63,15 +58,14 @@ async fn run_check(
     if *stop.borrow() || !alive.load(Ordering::Relaxed) {
         return interrupt(repository, gateway, job).await;
     }
-    let permit = worker
-        .semaphore
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| Error::Ownership)?;
+    let permit = tokio::select! {
+        permit = worker.semaphore.clone().acquire_owned() => permit.map_err(|_| Error::Ownership)?,
+        _ = stop.changed() => return interrupt(repository, gateway, job).await,
+    };
     let input = job.input.clone();
     let store = artifacts.clone();
     let start = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
         let manifest: CheckManifest = store.record(&input)?;
         if matches!(manifest.assurance, Assurance::HonestRoleMechanics)
             && !allow_unverified_mechanics
@@ -79,13 +73,7 @@ async fn run_check(
             return Err(Error::ProofUnavailable);
         }
         let (engine, progress) = ComparisonEngine::start(store, manifest)?;
-        Ok::<_, Error>((
-            RunningCheck {
-                engine,
-                _permit: permit,
-            },
-            progress,
-        ))
+        Ok::<_, Error>((engine, progress))
     })
     .await
     .map_err(|_| Error::Ownership)?;
@@ -147,10 +135,18 @@ async fn run_check(
             }
         };
         consumed = Some(response.id);
+        let permit = tokio::select! {
+            permit = worker.semaphore.clone().acquire_owned() => permit.map_err(|_| Error::Ownership)?,
+            _ = stop.changed() => {
+                drop(running);
+                return interrupt(repository, gateway, job).await;
+            },
+        };
         let store = artifacts.clone();
         let next = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
             let response: Response = store.record(&response)?;
-            let progress = running.engine.advance(response)?;
+            let progress = running.advance(response)?;
             Ok::<_, Error>((running, progress))
         })
         .await
