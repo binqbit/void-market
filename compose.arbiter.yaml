@@ -1,0 +1,102 @@
+# One local demo node. Additional nodes use separate identities, databases and artifact roots.
+x-arbiter: &arbiter
+  image: void-market-arbiter:local
+  build:
+    context: .
+    dockerfile: docker/arbiter/Dockerfile
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  network_mode: service:api
+  environment:
+    NODE_ID: ${NODE_ID:?Set the provisioned node ID}
+    DEPLOYMENT_ID: ${DEPLOYMENT_ID:?Set the deployment ID}
+    GATEWAY_URL: http://127.0.0.1:8080
+    LOCAL_DEMO: "true"
+    LISTEN: 127.0.0.1:8090
+    DATABASE_HOST: arbiter-db
+    DATABASE_PORT: "5432"
+    DATABASE_NAME: arbiter
+    DATABASE_USER: arbiter
+    DATABASE_PASSWORD_FILE: /run/secrets/arbiter_database_password
+    SIGNING_KEY_FILE: /run/secrets/arbiter_signing_key
+    SERVICE_TOKEN_FILE: /run/secrets/arbiter_service_token
+    ARTIFACT_ROOT: /var/lib/arbiter/artifacts
+    CAPACITY: "1"
+    RUST_LOG: info
+  secrets:
+    - source: arbiter_database_password
+      uid: "${LOCAL_UID:-1000}"
+      gid: "${LOCAL_GID:-1000}"
+      mode: 0400
+    - source: arbiter_signing_key
+      uid: "${LOCAL_UID:-1000}"
+      gid: "${LOCAL_GID:-1000}"
+      mode: 0400
+    - source: arbiter_service_token
+      uid: "${LOCAL_UID:-1000}"
+      gid: "${LOCAL_GID:-1000}"
+      mode: 0400
+  volumes:
+    - ${ARBITER_ARTIFACT_ROOT:?Set the node-owned artifact directory}:/var/lib/arbiter/artifacts
+  pids_limit: 128
+  mem_limit: 4g
+  cpus: 2
+  stop_grace_period: 120s
+
+services:
+  arbiter-db:
+    image: postgres:18.6-bookworm
+    environment:
+      POSTGRES_DB: arbiter
+      POSTGRES_USER: arbiter
+      POSTGRES_PASSWORD_FILE: /run/secrets/arbiter_database_password
+    secrets:
+      - arbiter_database_password
+    volumes:
+      - arbiter_database:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arbiter -d arbiter"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - backend
+
+  arbiter-migrate:
+    <<: *arbiter
+    command: ["migrate"]
+    depends_on:
+      arbiter-db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: "no"
+
+  arbiter:
+    <<: *arbiter
+    depends_on:
+      arbiter-migrate:
+        condition: service_completed_successfully
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/arbiter", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+secrets:
+  arbiter_database_password:
+    environment: ARBITER_DATABASE_PASSWORD
+  arbiter_signing_key:
+    file: ${ARBITER_SIGNING_KEY_FILE:?Set the node signing-key file}
+  arbiter_service_token:
+    file: ${ARBITER_SERVICE_TOKEN_FILE:?Set the node service-token file}
+
+volumes:
+  arbiter_database:

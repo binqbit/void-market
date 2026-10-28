@@ -1,4 +1,4 @@
-# Local development: internal asset ownership; no RPC or HE services.
+# Local market deployment. compose.arbiter.yaml adds the optional local HE node.
 x-service: &service
   image: void-market:local
   build:
