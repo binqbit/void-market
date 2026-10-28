@@ -34,6 +34,7 @@ impl Row {
             generation: self.generation,
             cancel_requested: self.cancel_requested,
             interactive: self.interactive,
+            demo_release: None,
             instance_id: self.instance_id,
             response: self
                 .response
@@ -47,6 +48,31 @@ impl Row {
                 .map_err(|_| ApiError::Internal)?,
         })
     }
+}
+
+#[cfg(feature = "demo-mode")]
+pub async fn demo_release(
+    pool: &PgPool,
+    job: &Job,
+) -> Result<Option<arbiter_protocol::DemoRelease>> {
+    let closed: Option<i64> = sqlx::query_scalar(
+        "SELECT a.closes_at_ms-3600000 FROM approval_sessions s
+         JOIN auction_checks c ON c.session_id=s.id JOIN auctions a ON a.id=c.auction_id
+         JOIN auction_participants l ON l.auction_id=a.id AND l.account_id=c.left_account
+         JOIN auction_participants r ON r.auction_id=a.id AND r.account_id=c.right_account
+         WHERE s.job_id=$1 AND a.node_id=$2 AND a.execution='localnet' AND a.status='matching'
+         AND a.closes_at_ms-3600000 < (s.check_context->'manifest'->>'release_at_ms')::bigint AND c.precomputed
+         AND a.generation=c.generation AND a.round_root=c.round_root
+         AND l.status='active' AND r.status='active'",
+    )
+    .bind(job.id)
+    .bind(job.node_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(closed.map(|closed_at_ms| arbiter_protocol::DemoRelease {
+        input: job.input.clone(),
+        closed_at_ms,
+    }))
 }
 
 pub async fn provision(pool: &PgPool, input: NodeProvision) -> Result<()> {

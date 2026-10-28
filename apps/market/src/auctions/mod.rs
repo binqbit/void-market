@@ -1,5 +1,7 @@
 pub mod amount;
 mod clock;
+#[cfg(feature = "demo-mode")]
+mod closing;
 mod drafts;
 mod inputs;
 pub mod matching;

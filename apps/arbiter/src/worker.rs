@@ -110,7 +110,7 @@ async fn run_check(
         if status == JobStatus::Completed {
             return Ok(());
         }
-        let response = loop {
+        let (response, demo_release) = loop {
             if *stop.borrow()
                 || !alive.load(Ordering::Relaxed)
                 || deadline.is_some_and(|deadline| Instant::now() >= deadline)
@@ -127,7 +127,7 @@ async fn run_check(
                 return Err(Error::Ownership);
             }
             if let Some(response) = current.response {
-                break response;
+                break (response, current.demo_release);
             }
             tokio::select! {
                 _ = stop.changed() => {},
@@ -143,10 +143,25 @@ async fn run_check(
             },
         };
         let store = artifacts.clone();
+        let expected_input = job.input.clone();
         let next = tokio::task::spawn_blocking(move || {
             let _permit = permit;
             let response: Response = store.record(&response)?;
-            let progress = running.advance(response)?;
+            let progress = if let Some(release) = demo_release {
+                if !allow_unverified_mechanics || release.input != expected_input {
+                    return Err(Error::Response);
+                }
+                #[cfg(feature = "demo-mode")]
+                {
+                    running.advance_after_demo_close(response, release.closed_at_ms)?
+                }
+                #[cfg(not(feature = "demo-mode"))]
+                {
+                    return Err(Error::Response);
+                }
+            } else {
+                running.advance(response)?
+            };
             Ok::<_, Error>((running, progress))
         })
         .await

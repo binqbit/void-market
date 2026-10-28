@@ -155,7 +155,16 @@ async fn job(
     .fetch_optional(&state.pool)
     .await?
     .ok_or(ApiError::NotFound)?;
-    Ok(reply(json!(row.job()?)))
+    let job = row.job()?;
+    #[cfg(feature = "demo-mode")]
+    let job = {
+        let mut job = job;
+        if state.chains.is_some() {
+            job.demo_release = repository::demo_release(&state.pool, &job).await?;
+        }
+        job
+    };
+    Ok(reply(json!(job)))
 }
 
 async fn claim(

@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+default = []
+demo-mode = []
+
 [dependencies]
 check-workflow = { path = "../../crates/check-workflow" }
 tfhe-math = { path = "../../crates/tfhe-math" }

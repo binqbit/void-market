@@ -150,6 +150,24 @@ impl ComparisonEngine {
     }
 
     pub fn advance(&mut self, response: Response) -> Result<Progress> {
+        self.advance_with_release(response, None)
+    }
+
+    /// The caller must obtain this time from the authenticated gateway for this check.
+    #[cfg(feature = "demo-mode")]
+    pub fn advance_after_demo_close(
+        &mut self,
+        response: Response,
+        closed_at_ms: i64,
+    ) -> Result<Progress> {
+        self.advance_with_release(response, Some(closed_at_ms))
+    }
+
+    fn advance_with_release(
+        &mut self,
+        response: Response,
+        demo_close: Option<i64>,
+    ) -> Result<Progress> {
         let step = self.step.take().ok_or(Error::Response)?;
         let expected = self.session.context();
         let context_id = expected.id();
@@ -198,7 +216,10 @@ impl ComparisonEngine {
                     .map_err(|_| Error::Response)?
                     .as_millis();
                 let release = self.context.manifest.release_at_ms.ok_or(Error::Response)?;
-                if release < 0 || now < release as u128 {
+                let released_early = demo_close.is_some_and(|closed| {
+                    closed >= 0 && closed <= release && now >= closed as u128
+                });
+                if release < 0 || (now < release as u128 && !released_early) {
                     return Err(Error::Response);
                 }
                 let contributions = self.import_contributions(context, base, &contributions)?;

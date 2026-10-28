@@ -58,9 +58,73 @@ function auction(): Auction {
       bid: true,
       withdraw: false,
       complete: false,
+      close_bidding: false,
     },
   };
 }
+
+test("demo seller confirms early closure and keeps the remaining approval flow", async ({
+  page,
+}, info) => {
+  const data = auction();
+  data.execution = "localnet_custody";
+  data.actions.bid = false;
+  data.actions.close_bidding = true;
+  data.active_buyers = 2;
+  data.participation = {
+    status: "active",
+    remaining_ms: 600000,
+    timer_running: false,
+    created_at_ms: Date.now(),
+  };
+  await fixture(page, "seller", data);
+  let calls = 0;
+  await page.route(`**/api/v1/auctions/${id}/close-bidding`, (route) => {
+    calls += 1;
+    data.closes_at_ms = Date.now() + 3600000;
+    data.bidding_closes_at_ms = data.closes_at_ms - 3600000;
+    data.required_from_ms = data.bidding_closes_at_ms;
+    data.status = "matching";
+    data.actions.close_bidding = false;
+    return route.fulfill({ json: data });
+  });
+  await page.goto(`/market/${id}`);
+  await page.getByRole("button", { name: "Close bidding now" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Approvals already collected are kept");
+  await expect(dialog).toContainText("10-minute");
+  await page.screenshot({
+    path: info.outputPath("close-bidding-review.png"),
+    fullPage: true,
+  });
+  expect(calls).toBe(0);
+  await dialog.getByRole("button", { name: "Keep bidding open" }).click();
+  expect(calls).toBe(0);
+  await page.getByRole("button", { name: "Close bidding now" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close bidding now" })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByText("Bidding is closed. Finish your remaining approvals", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Messages" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Close bidding now" }),
+  ).toHaveCount(0);
+  expect(calls).toBe(1);
+});
+
+test("ordinary auctions do not expose demo acceleration", async ({ page }) => {
+  await fixture(page, "seller", auction());
+  await page.goto(`/market/${id}`);
+  await expect(
+    page.getByRole("button", { name: "Close bidding now" }),
+  ).toHaveCount(0);
+});
 
 async function fixture(
   page: Page,
@@ -210,6 +274,7 @@ test("portfolio draft requires explicit publish consent", async ({ page }) => {
     bid: false,
     withdraw: false,
     complete: false,
+    close_bidding: false,
   };
   await fixture(page, "seller", data);
   await page.route("**/api/v1/auctions", async (route) => {
@@ -229,6 +294,7 @@ test("portfolio draft requires explicit publish consent", async ({ page }) => {
       bid: false,
       withdraw: false,
       complete: false,
+      close_bidding: false,
     };
     await route.fulfill({ json: data });
   });
@@ -263,6 +329,7 @@ test("seller completes from Messages with payment explicitly unverified", async 
     bid: false,
     withdraw: false,
     complete: true,
+    close_bidding: false,
   };
   const snapshot = await fixture(page, "seller", data);
   snapshot.pending = 1;

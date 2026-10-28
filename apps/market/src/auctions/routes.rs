@@ -11,6 +11,9 @@ use crate::{
 use actix_web::{HttpRequest, HttpResponse, web};
 use uuid::Uuid;
 
+#[cfg(feature = "demo-mode")]
+use super::closing;
+
 pub fn configure(config: &mut web::ServiceConfig) {
     config
         .route("/v1/auctions", web::get().to(list))
@@ -23,6 +26,12 @@ pub fn configure(config: &mut web::ServiceConfig) {
         .route("/v1/auctions/{id}/bids", web::post().to(bid))
         .route("/v1/auctions/{id}/withdraw", web::post().to(withdraw))
         .route("/v1/auctions/{id}/complete", web::post().to(complete));
+
+    #[cfg(feature = "demo-mode")]
+    config.route(
+        "/v1/auctions/{id}/close-bidding",
+        web::post().to(close_bidding),
+    );
 }
 
 async fn list(
@@ -106,6 +115,16 @@ async fn bid(
 ) -> Result<HttpResponse> {
     service::bid(&state, owner.0, *id, body.into_inner()).await?;
     Ok(HttpResponse::Accepted().json(repository::view(&state, *id, Some(owner.0)).await?))
+}
+
+#[cfg(feature = "demo-mode")]
+async fn close_bidding(
+    state: web::Data<AppState>,
+    owner: Principal,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse> {
+    closing::close(&state, owner.0, *id).await?;
+    Ok(HttpResponse::Ok().json(repository::view(&state, *id, Some(owner.0)).await?))
 }
 
 async fn withdraw(

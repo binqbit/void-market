@@ -61,6 +61,7 @@ export interface Auction {
     bid: boolean;
     withdraw: boolean;
     complete: boolean;
+    close_bidding: boolean;
   };
 }
 

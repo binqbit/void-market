@@ -140,6 +140,11 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
     let is_open = auction.status == "open" && bidding_deadline > now;
     let editable = seller_view && auction.status == "draft";
     let actions = Actions {
+        close_bidding: cfg!(feature = "demo-mode")
+            && seller_view
+            && is_open
+            && auction.execution == "localnet"
+            && state.chains.is_some(),
         edit: editable,
         publish: editable,
         cancel: editable,

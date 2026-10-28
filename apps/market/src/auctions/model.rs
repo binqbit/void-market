@@ -177,4 +177,5 @@ pub struct Actions {
     pub bid: bool,
     pub withdraw: bool,
     pub complete: bool,
+    pub close_bidding: bool,
 }

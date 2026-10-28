@@ -14,6 +14,7 @@ import { WithdrawBidButton } from "../auctions/withdraw-button";
 import { useMessages } from "../messages/provider";
 import { TransactionCard } from "../demo/transaction-card";
 import { loginHref } from "../auth/return-to";
+import { CloseBiddingButton } from "../auctions/close-bidding-button";
 
 const reasons: Record<string, string> = {
   no_remaining_buyers:
@@ -131,6 +132,13 @@ export function AuctionPage() {
                   </Link>
                 )}
               </>
+            )}
+            {auction.actions.close_bidding && (
+              <CloseBiddingButton
+                id={auction.id}
+                activeBuyers={auction.active_buyers}
+                onComplete={query.refresh}
+              />
             )}
             {auction.status === "matching" && (
               <p>

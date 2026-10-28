@@ -1,3 +1,4 @@
+mod closing;
 mod recovery;
 
 use crate::support::{Fixture, Identity};

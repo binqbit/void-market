@@ -83,9 +83,20 @@ pub struct Job {
     pub cancel_requested: bool,
     #[serde(default)]
     pub interactive: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub demo_release: Option<DemoRelease>,
     pub instance_id: Option<Uuid>,
     pub response: Option<ArtifactRef>,
     pub output: Option<ArtifactRef>,
+}
+
+/// Returned only by a demo-enabled gateway after the seller closes bidding.
+/// The input reference binds this permission to one immutable check manifest.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DemoRelease {
+    pub input: ArtifactRef,
+    pub closed_at_ms: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

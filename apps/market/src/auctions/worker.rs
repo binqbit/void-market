@@ -67,7 +67,7 @@ pub async fn advance_one(state: &AppState) -> Result<bool> {
     Ok(false)
 }
 
-async fn freeze(connection: &mut PgConnection, auction: &AuctionRow) -> Result<()> {
+pub(super) async fn freeze(connection: &mut PgConnection, auction: &AuctionRow) -> Result<()> {
     let members = repository::participants(connection, auction.id).await?;
     let history: Vec<_> = members
         .iter()

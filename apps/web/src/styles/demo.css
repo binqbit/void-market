@@ -25,6 +25,14 @@
   background: #dabb69;
   box-shadow: 0 0 10px #dabb6966;
 }
+.demo-close-bidding {
+  color: #705300;
+  border-color: #b7953e;
+}
+:root[data-theme="dark"] .demo-close-bidding {
+  color: #dabb69;
+  border-color: #dabb6966;
+}
 .demo-notice {
   display: flex;
   align-items: center;

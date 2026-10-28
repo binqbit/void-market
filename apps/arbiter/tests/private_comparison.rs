@@ -77,6 +77,43 @@ fn independent_owner_roundtrip_uses_the_node_engine() {
         "The node must reject a premature transition to number decryption"
     );
 
+    #[cfg(feature = "demo-mode")]
+    {
+        let mut accelerated = prepared.clone();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        accelerated.release_at_ms = Some(now + 3_600_000);
+        let (mut engine, Progress::Waiting(reference)) =
+            ComparisonEngine::start(store.clone(), accelerated).unwrap()
+        else {
+            panic!("A demo auction must collect masks before early closure");
+        };
+        let request: Request = store.record(&reference).unwrap();
+        let mut participants = support::Participants::new(&keys, store.clone());
+        let collected_masks = participants.respond(request);
+        let mut progress = engine
+            .advance_after_demo_close(collected_masks, now)
+            .unwrap();
+        let mut steps = 1;
+        loop {
+            match progress {
+                Progress::Waiting(reference) => {
+                    let request: Request = store.record(&reference).unwrap();
+                    progress = engine.advance(participants.respond(request)).unwrap();
+                    steps += 1;
+                }
+                Progress::Complete(output) => {
+                    let result: serde_json::Value = store.record(&output).unwrap();
+                    assert_eq!(result["value"], true);
+                    assert_eq!(steps, 5, "Early closure must reuse the collected masks");
+                    break;
+                }
+            }
+        }
+    }
+
     let (mut engine, progress) = ComparisonEngine::start(store.clone(), prepared).unwrap();
     assert!(matches!(progress, Progress::Waiting(_)));
     let premature = Response::AnswerCommitment {

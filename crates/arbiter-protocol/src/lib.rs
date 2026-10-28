@@ -7,7 +7,8 @@ pub use results::{sign_result, verify_result};
 
 pub use authentication::{RequestSignature, SigningKey, public_key, sign, verify};
 pub use jobs::{
-    ArtifactRef, Claim, Completion, Job, JobInput, JobStatus, NewJob, NodeProvision, Registration,
+    ArtifactRef, Claim, Completion, DemoRelease, Job, JobInput, JobStatus, NewJob, NodeProvision,
+    Registration,
 };
 
 pub const SCHEMA_VERSION: u8 = 1;

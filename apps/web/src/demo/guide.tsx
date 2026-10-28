@@ -89,7 +89,8 @@ export function DemoGuide({
             Claim local ZEC for each buyer. Bob bids 1.50 ZEC; Daniel bids 1.25
             ZEC. The draft allows 30 minutes for setup and bidding, followed by
             a final hour for approvals. You can adjust its end time before
-            publishing.
+            publishing. To skip the wait, return to Alice and use Close bidding
+            now when it is available on the auction.
           </p>
         </li>
         <li>

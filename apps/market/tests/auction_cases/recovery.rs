@@ -6,7 +6,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 // Inject ready obligations to test metering/fencing separately from the native HE journey.
-async fn ready_obligation(
+pub(super) async fn ready_obligation(
     fixture: &Fixture,
     auction: Uuid,
     left: &Identity,
