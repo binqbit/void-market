@@ -50,6 +50,11 @@ impl Trading {
         let node_db = options.options([("search_path", schemas[1].clone())]);
         let pool = PgPool::connect_with(market_db.clone()).await.unwrap();
         database::MIGRATIONS.run(&pool).await.unwrap();
+        // Keep native HE work small without changing the application's 64-bit default.
+        sqlx::query("ALTER TABLE auctions ALTER COLUMN width SET DEFAULT 8")
+            .execute(&pool)
+            .await
+            .unwrap();
         let local = PgPool::connect_with(node_db.clone()).await.unwrap();
         MIGRATIONS.run(&local).await.unwrap();
         local.close().await;

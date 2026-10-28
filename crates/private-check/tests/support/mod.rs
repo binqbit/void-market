@@ -52,6 +52,7 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new(width: Width, x: u64, v: u64, predicate: Comparison) -> Self {
+        assert!(matches!(width, Width::U8 | Width::U16));
         let source = NumberInput::encrypt(&source_keys().encryption_context(), width, x).unwrap();
         let target = NumberInput::encrypt(&target_keys().encryption_context(), width, v).unwrap();
         let context = CheckContext::new([9; 32], owners(), predicate, &source, &target).unwrap();

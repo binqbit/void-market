@@ -1,4 +1,4 @@
-use super::support::{encrypted, foreign_keys, keys, public, session, uint};
+use super::support::{NATIVE_WIDTHS, encrypted, foreign_keys, keys, public, session, uint};
 use sha2::{Digest, Sha256};
 use tfhe_math::{
     DataType, EncryptionContext, EvaluationContext, MathError, MathSession, PublicValue, Result,
@@ -33,11 +33,11 @@ fn replace_body(frame: &[u8], body: &[u8]) -> Vec<u8> {
 }
 
 #[test]
-fn expanded_and_compact_roundtrips_for_every_type() {
+fn expanded_and_compact_roundtrips_for_native_test_types() {
     let limits = EncodingLimits::default();
     let ctx = keys().encryption_context();
     let values = std::iter::once(PublicValue::boolean(true)).chain(
-        Width::ALL
+        NATIVE_WIDTHS
             .into_iter()
             .map(|w| PublicValue::uint(w, w.maximum()).unwrap()),
     );

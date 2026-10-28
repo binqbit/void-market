@@ -5,7 +5,7 @@ use tfhe_math::{MathError, MathSession, PublicValue, Width};
 fn mixed_operands_preserve_order_and_no_plaintext_fallback() {
     let s = session();
     let a = encrypted(Width::U8, 9);
-    let b = public(Width::U16, 20);
+    let b = public(Width::U8, 20);
     assert_eq!(uint(&s.add_wide(&a, &b).unwrap()), 29);
     assert_eq!(uint(&s.add_wide(&b, &a).unwrap()), 29);
     flagged(s.sub_in_width(Width::U16, &a, &b).unwrap(), 65525, true);

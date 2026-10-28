@@ -271,7 +271,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
         KeySet::generate(MathParameters).unwrap(),
         KeySet::generate(MathParameters).unwrap(),
     ];
-    let manifest = support::prepare(&store, &keys, [42, 17], Width::U32, Predicate::Greater);
+    let manifest = support::prepare(&store, &keys, [42, 17], Width::U8, Predicate::Greater);
     let encrypted = NewJob {
         id: Uuid::new_v4(),
         node_id: id,

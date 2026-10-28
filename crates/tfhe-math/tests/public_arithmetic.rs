@@ -51,6 +51,23 @@ fn sixty_four_bit_boundaries() {
 }
 
 #[test]
+fn wider_integer_results_preserve_exact_values() {
+    let s = MathSession::public_reference();
+    let medium = u(Width::U16, u16::MAX.into());
+    let big = u(Width::U32, u32::MAX.into());
+
+    assert_eq!(
+        n(s.mul_wide(&medium, &medium).unwrap()),
+        u64::from(u16::MAX).pow(2)
+    );
+    assert_eq!(
+        n(s.mul_wide(&big, &big).unwrap()),
+        u64::from(u32::MAX).pow(2)
+    );
+    assert_eq!(n(s.add_wide(&big, &big).unwrap()), 2 * u64::from(u32::MAX));
+}
+
+#[test]
 fn typed_boolean_comparison_and_selection() {
     let s = MathSession::public_reference();
     let yes = TfheValue::from(PublicValue::boolean(true));

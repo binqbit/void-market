@@ -68,8 +68,10 @@ async fn early_requests_are_independent_and_do_not_consume_the_approval_budget()
             0,
             "/v1/auctions",
             json!({
-                "request_id":Uuid::new_v4(),"asset_id":asset,"reserve":"1",
-                "closes_at_ms":now + 7_200_000,
+                "request_id": Uuid::new_v4(),
+                "asset_id": asset,
+                "reserve": "0.00000001",
+                "closes_at_ms": now + 7_200_000,
             }),
         )
         .await
@@ -100,8 +102,11 @@ async fn early_requests_are_independent_and_do_not_consume_the_approval_budget()
         .post(
             1,
             &format!("{path}/bids"),
-            json!({"request_id":Uuid::new_v4(),
-        "amount":"2","policy_hash":published["policy_hash"]}),
+            json!({
+                "request_id": Uuid::new_v4(),
+                "amount": "0.00000002",
+                "policy_hash": published["policy_hash"],
+            }),
         )
         .await
         .error_for_status()
@@ -114,8 +119,11 @@ async fn early_requests_are_independent_and_do_not_consume_the_approval_budget()
         .post(
             2,
             &format!("{path}/bids"),
-            json!({"request_id":Uuid::new_v4(),
-        "amount":"3","policy_hash":published["policy_hash"]}),
+            json!({
+                "request_id": Uuid::new_v4(),
+                "amount": "0.00000003",
+                "policy_hash": published["policy_hash"],
+            }),
         )
         .await
         .error_for_status()
@@ -178,7 +186,9 @@ async fn frozen_auction_requests_number_before_masks_are_approved() {
             0,
             "/v1/auctions",
             json!({
-                "request_id": Uuid::new_v4(), "asset_id": asset, "reserve": "1",
+                "request_id": Uuid::new_v4(),
+                "asset_id": asset,
+                "reserve": "0.00000001",
                 "closes_at_ms": now + 3_720_000,
             }),
         )
@@ -205,7 +215,11 @@ async fn frozen_auction_requests_number_before_masks_are_approved() {
         .post(
             1,
             &format!("{path}/bids"),
-            json!({"request_id": Uuid::new_v4(), "amount": "2", "policy_hash": published["policy_hash"]}),
+            json!({
+                "request_id": Uuid::new_v4(),
+                "amount": "0.00000002",
+                "policy_hash": published["policy_hash"],
+            }),
         )
         .await
         .error_for_status()

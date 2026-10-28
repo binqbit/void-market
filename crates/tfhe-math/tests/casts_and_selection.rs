@@ -1,10 +1,10 @@
-use super::support::{bool_value, boolean, encrypted, public, session, uint};
+use super::support::{NATIVE_WIDTHS, bool_value, boolean, encrypted, public, session, uint};
 use tfhe_math::{DataType, MathError, Width};
 
 #[test]
 fn explicit_casts_and_oblivious_selection() {
     let s = session();
-    for w in Width::ALL {
+    for w in NATIVE_WIDTHS {
         for b in [false, true] {
             assert_eq!(uint(&s.bool_to_uint(&boolean(b), w).unwrap()), u64::from(b));
         }

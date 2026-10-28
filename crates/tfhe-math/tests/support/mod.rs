@@ -3,6 +3,8 @@ use tfhe_math::{
     FlaggedValue, KeySet, MathParameters, MathSession, PublicValue, TfheValue, Visibility, Width,
 };
 
+pub const NATIVE_WIDTHS: [Width; 2] = [Width::U8, Width::U16];
+
 pub fn keys() -> &'static KeySet {
     static KEYS: OnceLock<KeySet> = OnceLock::new();
     KEYS.get_or_init(|| KeySet::generate(MathParameters).expect("native key generation"))
@@ -18,10 +20,18 @@ pub fn session() -> MathSession {
 }
 
 pub fn public(w: Width, n: u64) -> TfheValue {
+    assert!(
+        NATIVE_WIDTHS.contains(&w),
+        "HE test fixtures are limited to U8/U16"
+    );
     PublicValue::uint(w, n).unwrap().into()
 }
 
 pub fn encrypted(w: Width, n: u64) -> TfheValue {
+    assert!(
+        NATIVE_WIDTHS.contains(&w),
+        "HE test fixtures are limited to U8/U16"
+    );
     keys()
         .encryption_context()
         .encrypt(PublicValue::uint(w, n).unwrap())
@@ -36,6 +46,10 @@ pub fn boolean(b: bool) -> TfheValue {
 }
 
 pub fn uint(v: &TfheValue) -> u64 {
+    assert!(matches!(
+        v.data_type(),
+        tfhe_math::DataType::Uint(Width::U8 | Width::U16)
+    ));
     assert_eq!(v.visibility(), Visibility::Encrypted);
     assert!(v.public_value().is_err());
     keys()

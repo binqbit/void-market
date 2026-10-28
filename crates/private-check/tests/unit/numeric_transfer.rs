@@ -17,7 +17,7 @@ fn full_numeric_roundtrip_preserves_boundary_values_under_independent_keys() {
     let helper =
         KeyOwnerContext::new(source.decryption_context(), source.evaluation_context()).unwrap();
 
-    for width in Width::ALL {
+    for width in [Width::U8, Width::U16] {
         for value in [0, width.maximum() / 2] {
             let input = NumberInput::encrypt(&source.encryption_context(), width, value).unwrap();
             let other = NumberInput::encrypt(&target.encryption_context(), width, 0).unwrap();

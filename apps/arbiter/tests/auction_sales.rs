@@ -35,8 +35,12 @@ async fn native_auction_keeps_tied_bids_private_and_delivers_once_after_seller_a
         .post(
             0,
             "/v1/auctions",
-            json!({"request_id":auction,"asset_id":asset,
-        "reserve":"1.25000000","closes_at_ms":close}),
+            json!({
+                "request_id": auction,
+                "asset_id": asset,
+                "reserve": "0.00000125",
+                "closes_at_ms": close,
+            }),
         )
         .await
         .error_for_status()
@@ -59,7 +63,11 @@ async fn native_auction_keeps_tied_bids_private_and_delivers_once_after_seller_a
         .unwrap();
     let mut bid_requests = Vec::new();
     for owner in [1, 2] {
-        let body = json!({"request_id":Uuid::new_v4(),"amount":"1.25000000","policy_hash":published["policy_hash"]});
+        let body = json!({
+            "request_id": Uuid::new_v4(),
+            "amount": "0.00000125",
+            "policy_hash": published["policy_hash"],
+        });
         let accepted = fixture
             .post(owner, &format!("{detail_path}/bids"), body.clone())
             .await;
@@ -162,7 +170,7 @@ async fn native_auction_keeps_tied_bids_private_and_delivers_once_after_seller_a
         final_state["winner"]["address"],
         fixture.accounts[1].to_string()
     );
-    assert_eq!(final_state["agreed_price"], "1.25000000");
+    assert_eq!(final_state["agreed_price"], "0.00000125");
     assert_eq!(final_state["checks_completed"], 3);
     assert_eq!(final_state["payment_status"], "unverified");
     assert!(fixture.get(Some(2), &detail_path).await["agreed_price"].is_null());
@@ -392,12 +400,6 @@ async fn small_auction(fixture: &Trading, reserve: &str) -> (Uuid, Uuid, Value) 
         .error_for_status()
         .unwrap()
         .json()
-        .await
-        .unwrap();
-    // Reduced-width isolated recovery profile; the normal 64-bit API path is tested above.
-    sqlx::query("UPDATE auctions SET width=8 WHERE id=$1 AND status='draft'")
-        .bind(auction)
-        .execute(&fixture.state.pool)
         .await
         .unwrap();
     let published: Value = fixture

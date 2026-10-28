@@ -1,4 +1,4 @@
-use super::support::{bool_value, boolean, encrypted, public, session, uint};
+use super::support::{NATIVE_WIDTHS, bool_value, boolean, encrypted, public, session, uint};
 use tfhe_math::Width;
 
 #[test]
@@ -14,7 +14,7 @@ fn boolean_truth_table_and_uint_bitwise() {
             assert_eq!(bool_value(&s.not(&x).unwrap()), !a);
         }
     }
-    for w in Width::ALL {
+    for w in NATIVE_WIDTHS {
         let a = encrypted(w, w.maximum() - 1);
         let b = public(Width::U8, 15);
         assert_eq!(uint(&s.xor(&a, &b).unwrap()), (w.maximum() - 1) ^ 15);

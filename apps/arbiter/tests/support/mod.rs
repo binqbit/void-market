@@ -218,6 +218,7 @@ pub(crate) fn prepare(
     width: Width,
     comparison: Predicate,
 ) -> CheckManifest {
+    assert!(matches!(width, Width::U8 | Width::U16));
     let material = keys.each_ref().map(|key| KeyMaterial {
         configuration: key.binding().config_fingerprint(),
         public_fingerprint: key.binding().public_key_fingerprint(),
