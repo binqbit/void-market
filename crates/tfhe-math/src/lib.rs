@@ -17,6 +17,8 @@ mod value;
 
 #[cfg(feature = "tfhe-backend")]
 pub mod codec;
+#[cfg(feature = "tfhe-backend")]
+pub mod secret_codec;
 pub mod width_policy;
 
 #[cfg(feature = "tfhe-backend")]

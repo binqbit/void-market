@@ -3294,6 +3294,7 @@ dependencies = [
  "sha2 0.10.9",
  "tfhe",
  "thiserror 2.0.18",
+ "zeroize",
 ]
 
 [[package]]

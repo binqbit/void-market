@@ -92,6 +92,21 @@ pub(crate) fn deserialize_public_key(bytes: &[u8], limit: u64) -> Result<::tfhe:
     deserialize(bytes, &params, limit)
 }
 
+pub(crate) fn deserialize_client_key(bytes: &[u8], limit: u64) -> Result<::tfhe::ClientKey> {
+    if bytes.len() as u64 > limit {
+        return Err(MathError::ResourceLimit);
+    }
+    let mut reader = Cursor::new(bytes);
+    let key: ::tfhe::ClientKey = ::tfhe::safe_serialization::safe_deserialize(&mut reader, limit)
+        .map_err(|_| MathError::InvalidEncoding)?;
+    let expected: ::tfhe::shortint::AtomicPatternParameters =
+        ::tfhe::shortint::parameters::PARAM_MESSAGE_2_CARRY_2_KS_PBS_TUNIFORM_2M128.into();
+    if reader.position() != bytes.len() as u64 || key.computation_parameters() != expected {
+        return Err(MathError::InvalidEncoding);
+    }
+    Ok(key)
+}
+
 pub(crate) fn deserialize_evaluation_key(bytes: &[u8], limit: u64) -> Result<::tfhe::ServerKey> {
     let params: <::tfhe::ServerKey as ParameterSetConformant>::ParameterSet =
         parameters::config().into();
