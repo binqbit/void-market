@@ -1,4 +1,5 @@
 use market::chains::{ethereum::abi, zcash::memo::MemoBinding};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn ethereum_decoding_rejects_malformed_and_non_ascii_rpc_data() {
@@ -193,6 +194,66 @@ async fn stale_tip_rpc(
             serde_json::json!({"wallet_tip":{"height":17},"node_tip":{"height":17},"locked":false})
         }
         "getblockcount" => serde_json::json!(18),
+        other => panic!("Unexpected RPC method {other}"),
+    };
+    actix_web::web::Json(serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}))
+}
+
+#[actix_web::test]
+async fn inconsistent_extraction_can_retry_the_retained_signed_payment() {
+    let inconsistent = actix_web::web::Data::new(AtomicBool::new(true));
+    let flag = inconsistent.clone();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = url::Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+    let server = actix_web::HttpServer::new(move || {
+        actix_web::App::new()
+            .app_data(flag.clone())
+            .route("/", actix_web::web::post().to(extraction_rpc))
+    })
+    .workers(1)
+    .listen(listener)
+    .unwrap()
+    .run();
+    let handle = server.handle();
+    actix_web::rt::spawn(server);
+    let client = market::chains::zcash::Zcash {
+        node: market::chains::rpc::Rpc::new(endpoint.clone(), None).unwrap(),
+        wallet: market::chains::rpc::Rpc::new(endpoint, None).unwrap(),
+    };
+
+    let first = client.extract("retained-signed-pczt").await;
+    inconsistent.store(false, Ordering::Relaxed);
+    let retry = client.extract("retained-signed-pczt").await;
+    handle.stop(true).await;
+
+    assert!(matches!(
+        first,
+        Err(market::http::error::ApiError::Unavailable)
+    ));
+    assert_eq!(
+        retry.unwrap(),
+        ("expected-id".into(), "signed-bytes".into())
+    );
+}
+
+async fn extraction_rpc(
+    body: actix_web::web::Json<serde_json::Value>,
+    inconsistent: actix_web::web::Data<AtomicBool>,
+) -> actix_web::web::Json<serde_json::Value> {
+    let result = match body["method"].as_str().unwrap() {
+        "pczt_extract" => {
+            assert_eq!(body["params"], serde_json::json!(["retained-signed-pczt"]));
+            serde_json::json!({"txid":"expected-id", "hex":"signed-bytes"})
+        }
+        "decoderawtransaction" => {
+            assert_eq!(body["params"], serde_json::json!(["signed-bytes"]));
+            let id = if inconsistent.load(Ordering::Relaxed) {
+                "different-id"
+            } else {
+                "expected-id"
+            };
+            serde_json::json!({"txid":id})
+        }
         other => panic!("Unexpected RPC method {other}"),
     };
     actix_web::web::Json(serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}))

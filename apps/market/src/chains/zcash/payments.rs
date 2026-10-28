@@ -126,9 +126,10 @@ impl Zcash {
             .call("decoderawtransaction", json!([raw]))
             .await?;
         if decoded["txid"] != id {
-            return Err(ApiError::Conflict(
-                "Signed Zcash transaction identity mismatch",
-            ));
+            // Keep the signed PCZT in the building stage until its identity is
+            // trustworthy. Reconciliation needs validated transaction bytes.
+            tracing::warn!("Zcash wallet returned inconsistent transaction identities");
+            return Err(ApiError::Unavailable);
         }
         Ok((id, raw))
     }
