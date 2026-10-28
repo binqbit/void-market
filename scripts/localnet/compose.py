@@ -120,6 +120,9 @@ def main():
         set_private_permissions(Path(values[name]), values)
     save(env_file, values)
 
+    compose_environment = os.environ.copy()
+    compose_environment.update(LOCAL_UID=values["LOCAL_UID"], LOCAL_GID=values["LOCAL_GID"])
+
     command = ["docker", "compose", "--env-file", str(env_file)]
     for filename in (
         "compose.yaml",
@@ -130,7 +133,9 @@ def main():
         command += ["-f", str(ROOT / filename)]
 
     def compose(*arguments):
-        subprocess.run(command + list(arguments), cwd=ROOT, check=True)
+        subprocess.run(
+            command + list(arguments), cwd=ROOT, env=compose_environment, check=True
+        )
 
     if args.command != "up":
         compose({"stop": "stop", "status": "ps", "logs": "logs"}[args.command])
@@ -167,7 +172,7 @@ def main():
                 "--network",
                 "none",
                 "--user",
-                f"{os.getuid()}:{os.getgid()}",
+                f"{values['LOCAL_UID']}:{values['LOCAL_GID']}",
                 "-e",
                 f"DEPLOYMENT_ID={values['DEPLOYMENT_ID']}",
                 "-e",
