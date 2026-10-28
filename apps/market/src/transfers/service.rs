@@ -37,6 +37,9 @@ pub async fn transfer(
     if asset.owner_id != actor {
         return Err(ApiError::Forbidden);
     }
+    if asset.active_auction_id.is_some() {
+        return Err(ApiError::Conflict("This asset is locked in an auction"));
+    }
     if actor == input.recipient_address {
         return Err(ApiError::BadRequest("Recipient must differ from sender"));
     }

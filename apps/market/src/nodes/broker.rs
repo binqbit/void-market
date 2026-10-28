@@ -101,7 +101,17 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
             crate::messages::consume_response(state, &mut tx, event_id(&event.data, "message_id")?)
                 .await?;
         }
-        "node.heartbeat" | "session.created" | "message.expired" | "message.withdrawn" => {}
+        "node.heartbeat"
+        | "session.created"
+        | "message.expired"
+        | "message.withdrawn"
+        | "auction.published"
+        | "auction.bid_admitted"
+        | "auction.frozen"
+        | "auction.awarded"
+        | "auction.participant_excluded"
+        | "auction.ended"
+        | "auction.completed" => {}
         _ => return Err(ApiError::BadRequest("Unknown node event")),
     }
     tx.commit().await?;

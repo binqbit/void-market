@@ -8,6 +8,7 @@ pub struct Asset {
     pub description: String,
     pub image: Option<String>,
     pub owner_id: Uuid,
+    pub active_auction_id: Option<Uuid>,
     pub created_at: String,
 }
 

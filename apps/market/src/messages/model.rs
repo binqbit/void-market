@@ -35,6 +35,8 @@ pub struct Message {
     pub id: Uuid,
     pub session_id: Uuid,
     pub session_title: String,
+    pub auction_id: Option<Uuid>,
+    pub can_withdraw: bool,
     pub request_id: Uuid,
     pub revision: i64,
     pub stage: ActionKind,
@@ -54,6 +56,7 @@ pub struct Snapshot {
     pub pending: usize,
     pub messages: Vec<Message>,
     pub sessions: Vec<SessionSummary>,
+    pub sales: Vec<crate::auctions::model::SaleRequest>,
 }
 
 #[derive(Deserialize)]
@@ -78,8 +81,22 @@ pub struct ParticipantInput {
 pub struct SessionSummary {
     pub id: Uuid,
     pub title: String,
+    pub auction_id: Option<Uuid>,
+    pub can_withdraw: bool,
     pub status: String,
     pub participation_status: String,
     pub remaining_ms: i64,
     pub timer_running: bool,
+}
+
+pub(crate) struct BoundCheck {
+    pub id: Uuid,
+    pub auction: Uuid,
+    pub generation: i64,
+    pub title: String,
+    pub node: Uuid,
+    pub width: u8,
+    pub predicate: check_workflow::messages::Predicate,
+    pub scope: Vec<u8>,
+    pub inputs: [crate::auctions::model::FrozenInput; 2],
 }

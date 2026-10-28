@@ -8,6 +8,7 @@ use webauthn_rs::prelude::{Webauthn, WebauthnBuilder};
 
 #[derive(Clone)]
 pub struct AppState {
+    pub auction_preparations: Arc<tokio::sync::Semaphore>,
     pub message_streams: Arc<tokio::sync::Semaphore>,
     pub custody: Option<Arc<crate::custody::Custody>>,
     pub pool: PgPool,
@@ -33,6 +34,7 @@ impl AppState {
             .map(crate::custody::Custody::new)
             .transpose()?;
         Ok(Self {
+            auction_preparations: Arc::new(tokio::sync::Semaphore::new(2)),
             message_streams: Arc::new(tokio::sync::Semaphore::new(64)),
             custody: custody.map(Arc::new),
             pool,

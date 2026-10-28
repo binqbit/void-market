@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod assets;
+pub mod auctions;
 pub mod auth;
 pub mod config;
 pub mod database;

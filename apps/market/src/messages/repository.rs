@@ -87,6 +87,15 @@ pub async fn create_session(state: &AppState, input: SessionInput) -> Result<()>
 }
 
 pub async fn lock_session(connection: &mut PgConnection, session: Uuid) -> Result<()> {
+    let auction: Option<Uuid> =
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+            .bind(session)
+            .fetch_optional(&mut *connection)
+            .await?
+            .flatten();
+    if let Some(auction) = auction {
+        crate::auctions::lock(connection, auction).await?;
+    }
     sqlx::query("SELECT id FROM approval_sessions WHERE id=$1 FOR UPDATE")
         .bind(session)
         .fetch_optional(connection)
@@ -100,6 +109,8 @@ struct MessageRow {
     id: Uuid,
     session_id: Uuid,
     session_title: String,
+    auction_id: Option<Uuid>,
+    can_withdraw: bool,
     request_id: Uuid,
     revision: i64,
     kind: String,
@@ -116,14 +127,19 @@ struct MessageRow {
 pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     let now = clock::now_ms()?;
     let rows: Vec<MessageRow> = sqlx::query_as(
-        "SELECT a.id, a.session_id, s.title AS session_title, a.request_id, a.revision,
-         a.kind, a.status, m.status AS participant_status, s.status AS session_status,
-         m.remaining_ms, m.chargeable, s.last_tick_ms, COALESCE(r.healthy AND
-         r.instance_id=s.clock_epoch AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
+        "SELECT a.id, a.session_id, s.title AS session_title, s.auction_id,
+         (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw, a.request_id, a.revision,
+         a.kind, a.status, COALESCE(p.status,m.status) AS participant_status, s.status AS session_status,
+         COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
+         COALESCE(p.chargeable,m.chargeable) AS chargeable,
+         COALESCE(x.last_tick_ms,s.last_tick_ms) AS last_tick_ms, COALESCE(r.healthy AND
+         r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE) AS clock_healthy, a.approval FROM
          approval_messages a JOIN approval_sessions s ON s.id=a.session_id JOIN
          approval_members m ON m.session_id=s.id AND m.account_id=a.account_id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
+         LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
+         ON p.auction_id=x.id AND p.account_id=a.account_id
          WHERE a.account_id=$1 ORDER BY CASE WHEN a.status='ready' THEN 0 ELSE 1 END,
          a.created_at DESC, a.id LIMIT 100",
     )
@@ -149,6 +165,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
             id: row.id,
             session_id: row.session_id,
             session_title: row.session_title,
+            auction_id: row.auction_id,
+            can_withdraw: row.can_withdraw,
             request_id: row.request_id,
             revision: row.revision,
             stage,
@@ -171,18 +189,23 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     .fetch_one(&state.pool)
     .await?;
     let sessions: Vec<SessionSummary> = sqlx::query_as(
-        "SELECT s.id, s.title, s.status, m.status AS participation_status,
-         m.remaining_ms, (m.chargeable AND COALESCE(r.healthy AND
-         r.instance_id=s.clock_epoch AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
+        "SELECT s.id, s.title, s.auction_id, (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
+         s.status, COALESCE(p.status,m.status) AS participation_status,
+         COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
+         (COALESCE(p.chargeable,m.chargeable) AND COALESCE(r.healthy AND
+         r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running FROM
          approval_sessions s JOIN approval_members m ON m.session_id=s.id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
+         LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p
+         ON p.auction_id=x.id AND p.account_id=m.account_id
          WHERE m.account_id=$1 ORDER BY s.created_at DESC LIMIT 100",
     )
     .bind(account)
     .bind(now)
     .fetch_all(&state.pool)
     .await?;
+    let sales = crate::auctions::pending_sales(state, account).await?;
     Ok(Snapshot {
         custody_mode: if state.custody.is_some() {
             "development"
@@ -191,22 +214,23 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
         },
         revision,
         server_time_ms: now,
-        pending: pending as usize,
+        pending: pending as usize + sales.len(),
         messages,
         sessions,
+        sales,
     })
 }
 
 pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
-    sqlx::query_scalar(
+    let messages: i64 = sqlx::query_scalar(
         "SELECT greatest(COALESCE((SELECT max(a.revision) FROM approval_messages a WHERE
          a.account_id=$1), 0), COALESCE((SELECT max(s.revision) FROM approval_sessions s
          JOIN approval_members m ON m.session_id=s.id WHERE m.account_id=$1), 0))",
     )
     .bind(account)
     .fetch_one(pool)
-    .await
-    .map_err(Into::into)
+    .await?;
+    Ok(messages.max(crate::auctions::revision(pool, account).await?))
 }
 
 pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) -> Result<Value> {
@@ -252,8 +276,10 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
     let now = clock::now_ms()?;
     clock::meter(&mut tx, session, now).await?;
     let (remaining, member, session_status): (i64, String, String) = sqlx::query_as(
-        "SELECT m.remaining_ms, m.status, s.status FROM approval_members m JOIN
-         approval_sessions s ON s.id=m.session_id WHERE m.session_id=$1 AND
+        "SELECT COALESCE(p.remaining_ms,m.remaining_ms), COALESCE(p.status,m.status), s.status
+         FROM approval_members m JOIN approval_sessions s ON s.id=m.session_id
+         LEFT JOIN auction_participants p ON p.auction_id=s.auction_id AND p.account_id=m.account_id
+         WHERE m.session_id=$1 AND
          m.account_id=$2",
     )
     .bind(session)
@@ -311,6 +337,15 @@ pub async fn approve(state: &AppState, account: Uuid, id: Uuid, input: Approve) 
 }
 
 pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<Value> {
+    let auction: Option<Uuid> =
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+            .bind(session)
+            .fetch_optional(&state.pool)
+            .await?
+            .flatten();
+    if let Some(auction) = auction {
+        return crate::auctions::withdraw(state, account, auction).await;
+    }
     let mut tx = state.pool.begin().await?;
     lock_session(&mut tx, session).await?;
     let (status, receipt): (String, Option<Value>) = sqlx::query_as(
@@ -389,4 +424,47 @@ pub async fn withdraw(state: &AppState, account: Uuid, session: Uuid) -> Result<
     .await?;
     tx.commit().await?;
     Ok(receipt)
+}
+
+pub(crate) async fn create_bound_check(
+    connection: &mut PgConnection,
+    check: super::model::BoundCheck,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO approval_sessions(id,title,node_id,comparison,width,auction_id,round_generation,scope_hash)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+    )
+    .bind(check.id)
+    .bind(check.title)
+    .bind(check.node)
+    .bind(
+        serde_json::to_value(check.predicate)
+            .map_err(|_| ApiError::Internal)?
+            .as_str()
+            .ok_or(ApiError::Internal)?,
+    )
+    .bind(i16::from(check.width))
+    .bind(check.auction)
+    .bind(check.generation)
+    .bind(check.scope)
+    .execute(&mut *connection)
+    .await?;
+    for (position, input) in check.inputs.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO approval_members(session_id,account_id,position,input_ref)
+            VALUES($1,$2,$3,$4)",
+        )
+        .bind(check.id)
+        .bind(input.owner)
+        .bind(position as i16)
+        .bind(json!(input))
+        .execute(&mut *connection)
+        .await?;
+    }
+    events::record_node(
+        connection,
+        "session.created",
+        json!({"session_id":check.id,"auction_id":check.auction}),
+    )
+    .await
 }

@@ -85,6 +85,7 @@ async fn work_loop(
             return Ok(());
         }
         let progressed = process_one(state).await?
+            || crate::auctions::advance_one(state).await?
             || prepare_session(state).await?
             || keys::generate_one(state).await?;
         if !progressed {
@@ -94,6 +95,15 @@ async fn work_loop(
             }
         }
     }
+}
+
+#[derive(sqlx::FromRow)]
+struct SessionPreparation {
+    id: Uuid,
+    node_id: Uuid,
+    comparison: String,
+    width: i16,
+    scope_hash: Option<Vec<u8>>,
 }
 
 async fn prepare_session(state: &AppState) -> Result<bool> {
@@ -109,19 +119,26 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
         return Ok(true);
     }
 
-    let row: Option<(Uuid, Uuid, String, i16)> = sqlx::query_as(
-        "SELECT s.id, s.node_id, s.comparison, s.width FROM approval_sessions s WHERE
+    let row: Option<SessionPreparation> = sqlx::query_as(
+        "SELECT s.id, s.node_id, s.comparison, s.width, s.scope_hash FROM approval_sessions s WHERE
          s.status='initializing' AND NOT EXISTS(SELECT 1 FROM approval_members m JOIN
          custody_keys k ON k.account_id=m.account_id WHERE m.session_id=s.id AND
          k.he_status<>'ready') ORDER BY s.created_at LIMIT 1",
     )
     .fetch_optional(&state.pool)
     .await?;
-    let Some((session, node, predicate, width)) = row else {
+    let Some(SessionPreparation {
+        id: session,
+        node_id: node,
+        comparison: predicate,
+        width,
+        scope_hash: scope,
+    }) = row
+    else {
         return Ok(false);
     };
-    let members: Vec<(Uuid, Vec<u8>)> = sqlx::query_as(
-        "SELECT account_id, input_sealed FROM approval_members
+    let members: Vec<InputRecord> = sqlx::query_as(
+        "SELECT account_id, input_sealed, input_ref FROM approval_members
          WHERE session_id=$1 ORDER BY position",
     )
     .bind(session)
@@ -131,14 +148,22 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
         return Err(ApiError::Internal);
     }
     let material = [
-        keys::material(&state.pool, members[0].0).await?,
-        keys::material(&state.pool, members[1].0).await?,
+        input_material(state, &members[0]).await?,
+        input_material(state, &members[1]).await?,
     ];
     let comparison: Predicate =
         serde_json::from_value(json!(predicate)).map_err(|_| ApiError::Internal)?;
     let custody = state.custody.as_ref().ok_or(ApiError::Unavailable)?.clone();
     let manifest = tokio::task::spawn_blocking(move || {
-        prepare_manifest(custody, session, members, material, width as u8, comparison)
+        prepare_manifest(
+            custody,
+            session,
+            members,
+            material,
+            width as u8,
+            comparison,
+            scope,
+        )
     })
     .await
     .map_err(|_| ApiError::Internal)??;
@@ -176,19 +201,52 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
     Ok(true)
 }
 
+#[derive(sqlx::FromRow)]
+struct InputRecord {
+    account_id: Uuid,
+    input_sealed: Option<Vec<u8>>,
+    input_ref: Option<Value>,
+}
+
+async fn input_material(state: &AppState, input: &InputRecord) -> Result<KeyMaterial> {
+    if let Some(value) = &input.input_ref {
+        let frozen: crate::auctions::model::FrozenInput =
+            serde_json::from_value(value.clone()).map_err(|_| ApiError::Internal)?;
+        if frozen.owner != input.account_id {
+            return Err(ApiError::Internal);
+        }
+        Ok(frozen.material)
+    } else {
+        keys::material(&state.pool, input.account_id).await
+    }
+}
+
 fn prepare_manifest(
     custody: Arc<crate::custody::Custody>,
     session: Uuid,
-    members: Vec<(Uuid, Vec<u8>)>,
+    members: Vec<InputRecord>,
     material: [KeyMaterial; 2],
     width: u8,
     comparison: Predicate,
+    scope: Option<Vec<u8>>,
 ) -> Result<ArtifactRef> {
     let mut inputs = Vec::new();
-    for (index, (account, sealed)) in members.iter().enumerate() {
-        let bytes = custody
-            .vault
-            .open(*account, &format!("session-input:{session}"), sealed)?;
+    for (index, member) in members.iter().enumerate() {
+        if let Some(value) = &member.input_ref {
+            let frozen: crate::auctions::model::FrozenInput =
+                serde_json::from_value(value.clone()).map_err(|_| ApiError::Internal)?;
+            if frozen.owner != member.account_id {
+                return Err(ApiError::Internal);
+            }
+            inputs.push(frozen.ciphertext);
+            continue;
+        }
+        let sealed = member.input_sealed.as_ref().ok_or(ApiError::Internal)?;
+        let bytes = custody.vault.open(
+            member.account_id,
+            &format!("session-input:{session}"),
+            sealed,
+        )?;
         let value = u64::from_le_bytes(
             bytes
                 .as_slice()
@@ -222,8 +280,14 @@ fn prepare_manifest(
     let manifest = CheckManifest {
         schema_version: 1,
         assurance: Assurance::HonestRoleMechanics,
-        external_context: sha2::Sha256::digest(session.as_bytes()).into(),
-        owners: [members[0].0, members[1].0],
+        external_context: match scope {
+            Some(scope) => scope
+                .as_slice()
+                .try_into()
+                .map_err(|_| ApiError::Internal)?,
+            None => sha2::Sha256::digest(session.as_bytes()).into(),
+        },
+        owners: [members[0].account_id, members[1].account_id],
         width,
         comparison,
         keys: material,

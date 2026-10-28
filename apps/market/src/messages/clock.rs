@@ -13,6 +13,14 @@ pub fn now_ms() -> Result<i64> {
 
 /// Call with the session row locked. A stale worker clock never spends user time.
 pub async fn meter(connection: &mut PgConnection, session: Uuid, now: i64) -> Result<()> {
+    let auction: Option<Uuid> =
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+            .bind(session)
+            .fetch_one(&mut *connection)
+            .await?;
+    if let Some(auction) = auction {
+        return crate::auctions::meter(connection, auction, now).await;
+    }
     let (epoch, last, status, node): (Option<Uuid>, Option<i64>, String, Uuid) = sqlx::query_as(
         "SELECT clock_epoch, last_tick_ms, status, node_id FROM approval_sessions WHERE id=$1",
     )
@@ -89,6 +97,14 @@ pub async fn meter(connection: &mut PgConnection, session: Uuid, now: i64) -> Re
 }
 
 pub async fn refresh_charging(connection: &mut PgConnection, session: Uuid) -> Result<()> {
+    let auction: Option<Uuid> =
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+            .bind(session)
+            .fetch_one(&mut *connection)
+            .await?;
+    if let Some(auction) = auction {
+        return crate::auctions::refresh_charging(connection, auction).await;
+    }
     sqlx::query(
         "UPDATE approval_members m SET chargeable=m.chargeable AND EXISTS (SELECT 1 FROM
          approval_messages a WHERE a.session_id=m.session_id AND
@@ -106,6 +122,14 @@ pub async fn terminate(
     account: Uuid,
     status: &str,
 ) -> Result<()> {
+    let auction: Option<Uuid> =
+        sqlx::query_scalar("SELECT auction_id FROM approval_sessions WHERE id=$1")
+            .bind(session)
+            .fetch_one(&mut *connection)
+            .await?;
+    if let Some(auction) = auction {
+        return crate::auctions::exclude(connection, auction, account, status).await;
+    }
     sqlx::query(
         "UPDATE approval_members SET status=$3, chargeable=FALSE WHERE session_id=$1 AND
          account_id=$2 AND status='active'",
@@ -179,7 +203,7 @@ pub async fn run(
         .execute(&mut *ownership)
         .await?;
         let sessions: Vec<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM approval_sessions WHERE status='active' ORDER BY id",
+            "SELECT id FROM approval_sessions WHERE status='active' AND auction_id IS NULL ORDER BY id",
         )
         .fetch_all(&state.pool)
         .await?;
@@ -205,6 +229,7 @@ pub async fn run(
             }
             tx.commit().await?;
         }
+        crate::auctions::tick(&state, now).await?;
     }
     sqlx::query("UPDATE approval_runtime SET healthy=FALSE WHERE instance_id=$1")
         .bind(instance)

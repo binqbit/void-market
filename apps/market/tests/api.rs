@@ -1,3 +1,4 @@
+mod auction_cases;
 mod message_cases;
 mod node_cases;
 mod support;

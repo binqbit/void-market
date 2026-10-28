@@ -12,13 +12,16 @@ use uuid::Uuid;
 
 /// Keep session-before-job lock ordering consistent with withdrawal and expiry.
 pub async fn lock_result_session(connection: &mut PgConnection, result: Uuid) -> Result<()> {
-    sqlx::query(
+    let session: Option<Uuid> = sqlx::query_scalar(
         "SELECT s.id FROM approval_sessions s JOIN arbiter_results r
-         ON s.job_id=(r.payload->>'job_id')::uuid WHERE r.id=$1 FOR UPDATE OF s",
+         ON s.job_id=(r.payload->>'job_id')::uuid WHERE r.id=$1",
     )
     .bind(result)
-    .fetch_optional(connection)
+    .fetch_optional(&mut *connection)
     .await?;
+    if let Some(session) = session {
+        lock_session(connection, session).await?;
+    }
     Ok(())
 }
 

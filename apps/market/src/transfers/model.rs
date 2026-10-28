@@ -14,5 +14,6 @@ pub struct Transfer {
     pub asset_id: Uuid,
     pub sender_id: Uuid,
     pub recipient_id: Uuid,
+    pub auction_id: Option<Uuid>,
     pub created_at: String,
 }
