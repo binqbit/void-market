@@ -1,3 +1,4 @@
+import { normalizeZecInput, zecInputError } from "../amounts";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -60,11 +61,19 @@ export function CreateAuctionDialog({
             placeholder="0.00000000"
             value={reserve}
             disabled={busy}
-            onChange={(event) => setReserve(event.target.value)}
+            onChange={(event) =>
+              setReserve(normalizeZecInput(event.target.value))
+            }
           />
         </label>
+        {zecInputError(reserve, true) && (
+          <p className="field-error" role="alert">
+            {zecInputError(reserve, true)}
+          </p>
+        )}
         <p className="field-help">
-          Up to 8 decimal places. Only you can see the reserve price.
+          Up to 8 decimal places. Hidden from buyers. In this development
+          version, Void Market holds the keys and processes the amount.
         </p>
         <label>
           Bidding closes

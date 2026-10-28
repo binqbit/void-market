@@ -5,8 +5,10 @@ import { AuctionCard } from "../auctions/card";
 import { useAuctionQuery } from "../auctions/use-auctions";
 import type { Auction } from "../auctions/types";
 import { ErrorNotice, Loading } from "../components/feedback";
+import { useDemoMode } from "../demo/config";
 
 export function MarketPage() {
+  const demo = useDemoMode();
   const [page, setPage] = useState(0);
   const query = useAuctionQuery<Auction[]>(
     `/v1/auctions?limit=20&offset=${page * 20}`,
@@ -26,8 +28,9 @@ export function MarketPage() {
       <div className="custody-note">
         <ShieldCheck size={17} />
         <span>
-          Development custody · Private bid comparisons. Prices in ZEC; payment
-          is not processed or verified.
+          {demo
+            ? "Demo localnet · Prices in ZEC. NFT transfers and payments run on local test networks with no real monetary value."
+            : "Development custody · Private bid comparisons. Prices in ZEC; payment is not processed or verified."}
         </span>
       </div>
       {query.error && (

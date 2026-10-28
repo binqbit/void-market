@@ -40,8 +40,8 @@ export function HomePage() {
             </Link>
           </div>
           <div className="hero-footnote">
-            <ShieldCheck size={16} /> Designed for private auctions. Asset
-            management is available now.
+            <ShieldCheck size={16} /> Private comparisons, clear approvals and
+            traceable asset transfers.
           </div>
         </div>
         <div
@@ -88,7 +88,7 @@ export function HomePage() {
             </div>
           </div>
           <span className="art-caption">
-            Protocol illustration · auction integration is in development
+            Seller reserve → buyer bids → private comparison
           </span>
         </div>
       </section>

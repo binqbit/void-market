@@ -1,3 +1,4 @@
+import { formatZec } from "../amounts";
 import { useState } from "react";
 import { post, message } from "../api/client";
 import { Dialog } from "../components/dialog";
@@ -81,7 +82,7 @@ export function CompleteSaleButton({
             </div>
             <div>
               <dt>Agreed price</dt>
-              <dd>{price} ZEC</dd>
+              <dd>{formatZec(price)} ZEC</dd>
             </div>
           </dl>
           <p>

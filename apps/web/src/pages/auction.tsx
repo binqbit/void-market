@@ -1,3 +1,4 @@
+import { formatZec } from "../amounts";
 import { ArrowLeft, Clock3, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useSession } from "../auth/session";
@@ -12,6 +13,7 @@ import { DraftEditor } from "../auctions/draft-editor";
 import { WithdrawBidButton } from "../auctions/withdraw-button";
 import { useMessages } from "../messages/provider";
 import { TransactionCard } from "../demo/transaction-card";
+import { loginHref } from "../auth/return-to";
 
 const reasons: Record<string, string> = {
   no_remaining_buyers:
@@ -88,12 +90,13 @@ export function AuctionPage() {
             </div>
             {auction.reserve !== null && (
               <p>
-                Your private reserve <strong>{auction.reserve} ZEC</strong>
+                Your private reserve{" "}
+                <strong>{formatZec(auction.reserve)} ZEC</strong>
               </p>
             )}
             {auction.your_bid !== null && (
               <p>
-                Your bid <strong>{auction.your_bid} ZEC</strong>
+                Your bid <strong>{formatZec(auction.your_bid)} ZEC</strong>
               </p>
             )}
             {auction.status === "open" && (
@@ -162,7 +165,8 @@ export function AuctionPage() {
             )}
             {auction.agreed_price && (
               <p>
-                Agreed price <strong>{auction.agreed_price} ZEC</strong>
+                Agreed price{" "}
+                <strong>{formatZec(auction.agreed_price)} ZEC</strong>
               </p>
             )}
             {auction.status === "awaiting_completion" && (
@@ -212,8 +216,9 @@ export function AuctionPage() {
               <p>Payment: {auction.payment_status}</p>
               {auction.payment && (
                 <p>
-                  Paid {auction.payment.paid} / {auction.payment.expected} ZEC.
-                  Remaining: {auction.payment.remaining} ZEC.
+                  Paid {formatZec(auction.payment.paid)} /{" "}
+                  {formatZec(auction.payment.expected)} ZEC. Remaining:{" "}
+                  {formatZec(auction.payment.remaining)} ZEC.
                 </p>
               )}
               {auction.settlement_note && (
@@ -231,7 +236,10 @@ export function AuctionPage() {
             <BidForm auction={auction} onComplete={query.refresh} />
           )}
           {!session.profile && auction.status === "open" && (
-            <Link className="button primary" to="/login">
+            <Link
+              className="button primary"
+              to={loginHref(`/market/${auction.id}`)}
+            >
               Sign in to bid
             </Link>
           )}

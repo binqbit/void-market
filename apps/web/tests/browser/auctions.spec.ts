@@ -349,7 +349,7 @@ test("a changed winner requires fresh transfer consent", async ({ page }) => {
   data.completion_request_id = nextRequest;
   await page.clock.runFor(5001);
   await expect(dialog).toContainText("@survivor");
-  await expect(dialog).toContainText("1.25000000 ZEC");
+  await expect(dialog).toContainText("1.25 ZEC");
   await expect(dialog.getByRole("checkbox")).not.toBeChecked();
   await expect(approve).toBeDisabled();
   expect(submitted).toBeNull();

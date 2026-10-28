@@ -43,7 +43,7 @@ export function DemoGuide({
         request_id: crypto.randomUUID(),
         asset_id: nft.id,
         reserve: "1.00000000",
-        closes_at_ms: Date.now() + 120000,
+        closes_at_ms: Date.now() + 30 * 60 * 1000,
       });
       localStorage.setItem(key, draft.id);
       setId(draft.id);
@@ -87,7 +87,8 @@ export function DemoGuide({
           <strong>Bob and Daniel place their bids</strong>
           <p>
             Claim local ZEC for each buyer. Bob bids 1.50 ZEC; Daniel bids 1.25
-            ZEC. Bidding closes two minutes after the draft is created.
+            ZEC. The draft allows 30 minutes for setup and bidding. You can
+            adjust its closing time before publishing.
           </p>
         </li>
         <li>

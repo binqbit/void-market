@@ -1,3 +1,4 @@
+import { normalizeZecInput, zecInputError } from "../amounts";
 import { useState } from "react";
 import { message, post } from "../api/client";
 import { ErrorNotice } from "../components/feedback";
@@ -83,7 +84,7 @@ export function DraftEditor({
             maxLength={32}
             disabled={busy}
             onChange={(event) => {
-              setReserve(event.target.value);
+              setReserve(normalizeZecInput(event.target.value));
               setConsent(false);
             }}
           />
@@ -100,6 +101,11 @@ export function DraftEditor({
             }}
           />
         </label>
+        {zecInputError(reserve, true) && (
+          <p className="field-error" role="alert">
+            {zecInputError(reserve, true)}
+          </p>
+        )}
         <button
           className="button"
           disabled={

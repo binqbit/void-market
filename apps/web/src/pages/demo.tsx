@@ -1,3 +1,4 @@
+import { formatZec } from "../amounts";
 import { Coins, FlaskConical, ImagePlus, Network } from "lucide-react";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
@@ -93,7 +94,7 @@ export function DemoPage() {
                 <strong className="demo-balance">
                   {query.data.own.balance === null
                     ? "Synchronizing…"
-                    : `${query.data.own.balance} ZEC`}
+                    : `${formatZec(query.data.own.balance)} ZEC`}
                 </strong>
               </div>
               <div className="demo-resource-buttons">

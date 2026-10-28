@@ -1,3 +1,4 @@
+import { formatZec, normalizeZecInput, zecInputError } from "../amounts";
 import { useState } from "react";
 import { message, post } from "../api/client";
 import { Dialog } from "../components/dialog";
@@ -48,6 +49,9 @@ export function BidForm({
     <section className="auction-action-panel">
       <h2>Place your private bid</h2>
       <p>Your amount is hidden from other buyers.</p>
+      <p className="field-help">
+        Development custody: Void Market holds the keys and processes your bid.
+      </p>
       {!auction.wallet_ready && (
         <p className="field-help">
           Your development wallet is preparing. This page will update
@@ -61,12 +65,17 @@ export function BidForm({
           maxLength={32}
           value={amount}
           placeholder="0.00000000"
-          onChange={(event) => setAmount(event.target.value)}
+          onChange={(event) => setAmount(normalizeZecInput(event.target.value))}
         />
       </label>
       <p className="field-help">
         Up to 8 decimal places. Your admitted amount cannot be changed.
       </p>
+      {zecInputError(amount, false) && (
+        <p className="field-error" role="alert">
+          {zecInputError(amount, false)}
+        </p>
+      )}
       <button
         className="button primary"
         disabled={!auction.wallet_ready || !validAmount(amount)}
@@ -81,7 +90,7 @@ export function BidForm({
           onClose={() => setReview(false)}
         >
           <p>
-            <strong>{amount} ZEC</strong> for{" "}
+            <strong>{formatZec(amount)} ZEC</strong> for{" "}
             <strong>{auction.asset.name}</strong>.
           </p>
           <p>
