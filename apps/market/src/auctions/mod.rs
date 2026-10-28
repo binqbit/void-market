@@ -1,5 +1,6 @@
 mod activity;
 pub mod amount;
+mod checks;
 mod clock;
 #[cfg(feature = "demo-mode")]
 mod closing;
