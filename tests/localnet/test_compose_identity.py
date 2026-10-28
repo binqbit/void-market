@@ -19,6 +19,7 @@ class ComposeIdentityTests(unittest.TestCase):
             state = Path(directory)
             uid, gid = os.getuid(), os.getgid()
             values = {
+                "COMPOSE_PROJECT_NAME": "identity-test",
                 "LOCAL_UID": str(uid),
                 "LOCAL_GID": str(gid),
                 "DATABASE_PASSWORD": "test database password",
@@ -44,6 +45,7 @@ class ComposeIdentityTests(unittest.TestCase):
                 if command[:2] == ["docker", "compose"]:
                     self.assertEqual(kwargs["env"]["LOCAL_UID"], str(uid))
                     self.assertEqual(kwargs["env"]["LOCAL_GID"], str(gid))
+                    self.assertEqual(kwargs["env"]["COMPOSE_PROJECT_NAME"], "identity-test")
                     return
 
                 self.assertEqual(command[:2], ["docker", "run"])
@@ -56,7 +58,14 @@ class ComposeIdentityTests(unittest.TestCase):
 
             with (
                 patch.object(sys, "argv", ["compose.py", "up", "--state", str(state)]),
-                patch.dict(os.environ, {"LOCAL_UID": "12345", "LOCAL_GID": "12345"}),
+                patch.dict(
+                    os.environ,
+                    {
+                        "LOCAL_UID": "12345",
+                        "LOCAL_GID": "12345",
+                        "COMPOSE_PROJECT_NAME": "another-stack",
+                    },
+                ),
                 patch.object(compose.os, "getuid", return_value=0),
                 patch.object(compose.os, "getgid", return_value=0),
                 patch.object(compose.os, "umask"),

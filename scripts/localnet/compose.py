@@ -79,7 +79,9 @@ def main():
         master = state / "secrets" / "custody.key"
         master.write_bytes(secrets.token_bytes(32))
         values = {
-            "COMPOSE_PROJECT_NAME": "void-market-localnet",
+            "COMPOSE_PROJECT_NAME": os.environ.get(
+                "COMPOSE_PROJECT_NAME", "void-market-localnet"
+            ),
             "LOCAL_UID": str(os.getuid()),
             "LOCAL_GID": str(os.getgid()),
             "LOCALNET_STATE_DIR": str(state / "chains"),
@@ -120,8 +122,16 @@ def main():
         set_private_permissions(Path(values[name]), values)
     save(env_file, values)
 
+    project = values.get("COMPOSE_PROJECT_NAME")
+    if not project:
+        raise SystemExit("The retained Compose project name is missing.")
+
     compose_environment = os.environ.copy()
-    compose_environment.update(LOCAL_UID=values["LOCAL_UID"], LOCAL_GID=values["LOCAL_GID"])
+    compose_environment.update(
+        COMPOSE_PROJECT_NAME=project,
+        LOCAL_UID=values["LOCAL_UID"],
+        LOCAL_GID=values["LOCAL_GID"],
+    )
 
     command = ["docker", "compose", "--env-file", str(env_file)]
     for filename in (
