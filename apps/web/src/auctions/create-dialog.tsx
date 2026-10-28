@@ -76,7 +76,7 @@ export function CreateAuctionDialog({
           version, Void Market holds the keys and processes the amount.
         </p>
         <label>
-          Bidding closes
+          Auction ends
           <input
             type="datetime-local"
             required
@@ -86,9 +86,9 @@ export function CreateAuctionDialog({
           />
         </label>
         <p className="field-help">
-          Up to 3 buyers. Required availability starts at this time.
-          Participants share a 10-minute budget across their approval requests;
-          they can prepare available approvals earlier.
+          New bids close one hour before the auction ends. The final hour is for
+          approvals only. Up to 3 buyers; each participant has one shared
+          10-minute response budget.
         </p>
         {error && <ErrorNotice>{error}</ErrorNotice>}
         <button

@@ -87,7 +87,7 @@ async fn overlapping_ready_obligations_charge_one_shared_interval() {
     .unwrap();
     sqlx::query(
         "UPDATE auctions SET status='matching',generation=1,input_root=$2,round_root=$2,
-         clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4 WHERE id=$1",
+         clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4+3600000 WHERE id=$1",
     )
     .bind(auction)
     .bind(vec![8u8; 32])
@@ -164,7 +164,7 @@ async fn early_approval_does_not_start_the_budget_before_bidding_closes() {
         .bind(epoch).bind(tick).execute(&fixture.state.pool).await.unwrap();
     sqlx::query("UPDATE auctions SET closes_at_ms=$2,clock_epoch=$3,last_tick_ms=$4 WHERE id=$1")
         .bind(auction)
-        .bind(tick + 60_000)
+        .bind(tick + 3_600_000 + 60_000)
         .bind(epoch)
         .bind(tick - 1000)
         .execute(&fixture.state.pool)
@@ -417,7 +417,7 @@ async fn auction_expiry_cancels_the_round_without_resetting_other_participants()
     .unwrap();
     sqlx::query(
         "UPDATE auctions SET status='matching',generation=1,input_root=$2,round_root=$2,
-        clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4 WHERE id=$1",
+        clock_epoch=$3,last_tick_ms=$4,closes_at_ms=$4+3600000 WHERE id=$1",
     )
     .bind(auction)
     .bind(vec![8u8; 32])

@@ -29,6 +29,7 @@ async fn native_auction_keeps_tied_bids_private_and_delivers_once_after_seller_a
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64
+        + 3_600_000
         + 30_000;
     let draft: Value = fixture
         .post(
@@ -371,6 +372,7 @@ async fn small_auction(fixture: &Trading, reserve: &str) -> (Uuid, Uuid, Value) 
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as i64
+        + 3_600_000
         + 15000;
     let draft: Value = fixture
         .post(

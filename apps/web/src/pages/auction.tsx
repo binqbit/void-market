@@ -82,7 +82,14 @@ export function AuctionPage() {
             </h2>
             <div className="auction-card-meta">
               <Clock3 size={16} />
-              Bidding closes {new Date(auction.closes_at_ms).toLocaleString()}
+              Auction ends {new Date(auction.closes_at_ms).toLocaleString()}
+            </div>
+            <div className="auction-card-meta">
+              <Clock3 size={16} />
+              Bidding closes{" "}
+              {new Date(
+                auction.bidding_closes_at_ms ?? auction.closes_at_ms - 3600000,
+              ).toLocaleString()}
             </div>
             <div className="auction-card-meta">
               <LockKeyhole size={16} />
@@ -106,7 +113,9 @@ export function AuctionPage() {
                   approve them now; required availability begins at{" "}
                   <strong>
                     {new Date(
-                      auction.required_from_ms ?? auction.closes_at_ms,
+                      auction.required_from_ms ??
+                        auction.bidding_closes_at_ms ??
+                        auction.closes_at_ms - 3600000,
                     ).toLocaleString()}
                   </strong>
                   .
@@ -122,6 +131,12 @@ export function AuctionPage() {
                   </Link>
                 )}
               </>
+            )}
+            {auction.status === "matching" && (
+              <p>
+                Bidding is closed. Finish your remaining approvals in Messages;
+                the result appears automatically after all checks complete.
+              </p>
             )}
             {own?.status === "withdrawn" && (
               <p className="notice">
@@ -262,9 +277,10 @@ export function AuctionPage() {
                 does not free a place.
               </li>
               <li>
-                Prepare approvals at any time. Once bidding closes, you have 10
-                minutes total for required responses across the auction. Service
-                and dependency waits pause the budget.
+                Bidding closes one hour before the auction ends. Prepare
+                approvals at any time. Once bidding closes, you have 10 minutes
+                total for required responses across the auction. Service and
+                dependency waits pause the budget.
               </li>
               <li>
                 {native

@@ -66,8 +66,8 @@ pub(crate) async fn apply(
         }
         ("deposit", Payload::Ethereum(_)) => {
             let auction = parent.as_ref().ok_or(ApiError::Internal)?;
-            let open =
-                auction.status == "deposit_pending" && auction.closes_at_ms > messages::now_ms()?;
+            let open = auction.status == "deposit_pending"
+                && auction.bidding_deadline() > messages::now_ms()?;
             sqlx::query("UPDATE auctions SET custody_status='held',status=CASE WHEN $2 THEN 'open' WHEN
          status='deposit_pending' THEN 'no_sale' ELSE status END,revision=nextval('message_revision')
          WHERE id=$1")

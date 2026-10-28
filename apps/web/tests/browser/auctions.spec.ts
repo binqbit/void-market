@@ -34,6 +34,7 @@ function auction(): Auction {
     payment_status: "unverified",
     wallet_ready: true,
     closes_at_ms: Date.now() + 86400000,
+    bidding_closes_at_ms: Date.now() + 86400000 - 3600000,
     created_at_ms: Date.now(),
     published_at_ms: Date.now(),
     finished_at_ms: null,

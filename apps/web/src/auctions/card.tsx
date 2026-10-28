@@ -30,7 +30,7 @@ export function AuctionCard({ auction }: { auction: Auction }) {
           <Clock3 size={15} />
           {auction.status === "draft"
             ? "Not published"
-            : new Date(auction.closes_at_ms).toLocaleString()}
+            : `Bids close ${new Date(auction.bidding_closes_at_ms ?? auction.closes_at_ms - 3600000).toLocaleString()}`}
         </div>
         <div className="auction-card-foot">
           <span>{accountName(auction.seller)}</span>

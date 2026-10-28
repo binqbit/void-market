@@ -389,7 +389,7 @@ pub(crate) async fn release_allowed(connection: &mut PgConnection, session: Uuid
          SELECT 1 FROM auction_checks c JOIN auctions a ON a.id=c.auction_id
          JOIN auction_participants l ON l.auction_id=a.id AND l.account_id=c.left_account
          JOIN auction_participants r ON r.auction_id=a.id AND r.account_id=c.right_account
-         WHERE c.session_id=s.id AND a.status='matching' AND a.closes_at_ms<=$2
+         WHERE c.session_id=s.id AND a.status='matching' AND a.closes_at_ms-3600000<=$2
          AND a.generation=c.generation AND a.input_root IS NOT NULL
          AND a.round_root=c.round_root AND l.status='active' AND r.status='active')
          FROM approval_sessions s WHERE s.id=$1",

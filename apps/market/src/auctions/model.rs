@@ -5,6 +5,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 pub const BUYER_LIMIT: usize = 3;
+pub const APPROVAL_WINDOW_MS: i64 = 60 * 60 * 1000;
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -88,6 +89,12 @@ pub(crate) struct AuctionRow {
     pub finished_at_ms: Option<i64>,
 }
 
+impl AuctionRow {
+    pub fn bidding_deadline(&self) -> i64 {
+        self.closes_at_ms.saturating_sub(APPROVAL_WINDOW_MS)
+    }
+}
+
 #[derive(sqlx::FromRow)]
 pub(crate) struct Participant {
     pub account_id: Uuid,
@@ -133,6 +140,7 @@ pub struct AuctionView {
     pub payment: Option<serde_json::Value>,
     pub wallet_ready: bool,
     pub closes_at_ms: i64,
+    pub bidding_closes_at_ms: i64,
     pub created_at_ms: i64,
     pub required_from_ms: i64,
     pub published_at_ms: Option<i64>,

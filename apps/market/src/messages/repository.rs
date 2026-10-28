@@ -141,7 +141,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          COALESCE(x.last_tick_ms,s.last_tick_ms) AS last_tick_ms, COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE) AS clock_healthy, a.approval,
-         COALESCE(c.precomputed,FALSE) AS precomputed,x.closes_at_ms FROM
+         COALESCE(c.precomputed,FALSE) AS precomputed,
+         x.closes_at_ms-3600000 AS closes_at_ms FROM
          approval_messages a JOIN approval_sessions s ON s.id=a.session_id JOIN
          approval_members m ON m.session_id=s.id AND m.account_id=a.account_id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
@@ -218,10 +219,10 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
          (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
          s.status, COALESCE(p.status,m.status) AS participation_status,
          COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
-         (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms<=$2) AND COALESCE(r.healthy AND
+         (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms-3600000<=$2) AND COALESCE(r.healthy AND
          r.instance_id=COALESCE(x.clock_epoch,s.clock_epoch) AND $2-r.last_tick_ms BETWEEN 0 AND 5000 AND
          n.enabled AND n.heartbeat_until>now(), FALSE)) AS timer_running,
-         CASE WHEN x.status='open' AND s.response_ref IS NOT NULL THEN x.closes_at_ms END AS waiting_until_ms FROM
+         CASE WHEN x.status='open' AND s.response_ref IS NOT NULL THEN x.closes_at_ms-3600000 END AS waiting_until_ms FROM
          approval_sessions s JOIN approval_members m ON m.session_id=s.id JOIN
          arbiter_nodes n ON n.id=s.node_id LEFT JOIN approval_runtime r ON r.singleton
          LEFT JOIN auctions x ON x.id=s.auction_id LEFT JOIN auction_participants p

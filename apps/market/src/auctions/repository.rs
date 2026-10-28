@@ -136,7 +136,8 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         None
     };
     let own_active = own.is_some_and(|member| member.status == "active");
-    let is_open = auction.status == "open" && auction.closes_at_ms > now;
+    let bidding_deadline = auction.bidding_deadline();
+    let is_open = auction.status == "open" && bidding_deadline > now;
     let editable = seller_view && auction.status == "draft";
     let actions = Actions {
         edit: editable,
@@ -161,15 +162,10 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
                 || (auction.payment_status == "confirmed" && auction.custody_status == "held")),
     };
     let participation = own.map(|member| {
-        let running = member.chargeable && healthy && own_active && now >= auction.closes_at_ms;
+        let running = member.chargeable && healthy && own_active && now >= bidding_deadline;
         let elapsed = if running {
-            now.saturating_sub(
-                auction
-                    .last_tick_ms
-                    .unwrap_or(now)
-                    .max(auction.closes_at_ms),
-            )
-            .clamp(0, 5000)
+            now.saturating_sub(auction.last_tick_ms.unwrap_or(now).max(bidding_deadline))
+                .clamp(0, 5000)
         } else {
             0
         };
@@ -205,7 +201,8 @@ pub async fn view(state: &AppState, id: Uuid, viewer: Option<Uuid>) -> Result<Au
         payment,
         wallet_ready,
         closes_at_ms: auction.closes_at_ms,
-        required_from_ms: auction.closes_at_ms,
+        bidding_closes_at_ms: bidding_deadline,
+        required_from_ms: bidding_deadline,
         created_at_ms: auction.created_at_ms,
         published_at_ms: auction.published_at_ms,
         finished_at_ms: auction.finished_at_ms,

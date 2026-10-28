@@ -50,14 +50,15 @@ pub async fn advance_one(state: &AppState) -> Result<bool> {
     for id in ids {
         let mut tx = state.pool.begin().await?;
         let auction = repository::lock(&mut tx, id).await?;
-        let changed = if auction.status == "open" && auction.closes_at_ms <= messages::now_ms()? {
-            freeze(&mut tx, &auction).await?;
-            true
-        } else if matches!(auction.status.as_str(), "open" | "matching") {
-            advance(state, &mut tx, &auction).await?
-        } else {
-            false
-        };
+        let changed =
+            if auction.status == "open" && auction.bidding_deadline() <= messages::now_ms()? {
+                freeze(&mut tx, &auction).await?;
+                true
+            } else if matches!(auction.status.as_str(), "open" | "matching") {
+                advance(state, &mut tx, &auction).await?
+            } else {
+                false
+            };
         tx.commit().await?;
         if changed {
             return Ok(true);

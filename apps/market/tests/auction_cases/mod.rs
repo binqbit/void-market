@@ -25,12 +25,47 @@ async fn draft(fixture: &Fixture, seller: &Identity, asset: Uuid) -> Value {
                 "request_id": Uuid::new_v4(),
                 "asset_id": asset,
                 "reserve": "1.25000001",
-                "closes_at_ms": now() + 60000,
+                "closes_at_ms": now() + 3_600_000 + 60_000,
             }),
         )
         .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
     body
+}
+
+#[actix_web::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn the_final_hour_stops_bid_admission_before_the_auction_end() {
+    let fixture = Fixture::with_custody().await;
+    let seller = fixture.register("Seller").await;
+    let buyer = fixture.register("Buyer").await;
+    let asset = fixture.asset(&seller).await;
+    let (auction, _) = published(&fixture, &seller, asset).await;
+    let end = now() + 3_599_000;
+    sqlx::query("UPDATE auctions SET closes_at_ms=$2 WHERE id=$1")
+        .bind(auction)
+        .bind(end)
+        .execute(&fixture.state.pool)
+        .await
+        .unwrap();
+    let path = format!("/v1/auctions/{auction}");
+    let view = fixture
+        .request("GET", &path, Some(&buyer.cookie), Value::Null)
+        .await
+        .2;
+    assert_eq!(view["closes_at_ms"], end);
+    assert_eq!(view["bidding_closes_at_ms"], end - 3_600_000);
+    assert_eq!(view["actions"]["bid"], false);
+    let response = fixture
+        .request(
+            "POST",
+            &format!("{path}/bids"),
+            Some(&buyer.cookie),
+            json!({"request_id":Uuid::new_v4(),"amount":"2","policy_hash":view["policy_hash"]}),
+        )
+        .await;
+    assert_eq!(response.0, StatusCode::CONFLICT);
+    fixture.cleanup().await;
 }
 
 // These helpers isolate metadata/policy behavior. Native publish, admission and HE are
@@ -142,7 +177,7 @@ async fn draft_amounts_remain_private_and_creation_retries_are_exact() {
     let seller = fixture.register("Seller").await;
     let other = fixture.register("Other").await;
     let asset = fixture.asset(&seller).await;
-    let body = json!({"request_id":Uuid::new_v4(),"asset_id":asset,"reserve":"90071992.54740993","closes_at_ms":now()+60000});
+    let body = json!({"request_id":Uuid::new_v4(),"asset_id":asset,"reserve":"90071992.54740993","closes_at_ms":now()+3_600_000+60_000});
     let (status, _, draft) = fixture
         .request("POST", "/v1/auctions", Some(&seller.cookie), body.clone())
         .await;
@@ -227,7 +262,7 @@ async fn active_auctions_lock_assets_and_published_policy_is_immutable() {
                 "POST",
                 &format!("{path}/draft"),
                 Some(&seller.cookie),
-                json!({"revision":view["revision"],"reserve":"9","closes_at_ms":now()+50000})
+                json!({"revision":view["revision"],"reserve":"9","closes_at_ms":now()+3_600_000+50_000})
             )
             .await
             .0,

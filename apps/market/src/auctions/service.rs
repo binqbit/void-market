@@ -130,7 +130,7 @@ fn admit(auction: &super::model::AuctionRow, buyer: Uuid, value: u64, now: i64) 
     if auction.seller_id == buyer {
         return Err(ApiError::Forbidden);
     }
-    if auction.status != "open" || auction.closes_at_ms <= now {
+    if auction.status != "open" || auction.bidding_deadline() <= now {
         return Err(ApiError::Conflict("This auction no longer accepts bids"));
     }
     let maximum = (1u64 << (auction.width - 1)) - 1;

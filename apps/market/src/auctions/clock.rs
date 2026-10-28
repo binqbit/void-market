@@ -29,7 +29,7 @@ pub async fn meter(connection: &mut PgConnection, auction: Uuid, now: i64) -> Re
         sqlx::query_scalar("SELECT instance_id FROM approval_runtime WHERE singleton")
             .fetch_optional(&mut *connection)
             .await?;
-    let required_from = row.closes_at_ms;
+    let required_from = row.bidding_deadline();
     let available = now >= required_from
         && healthy(connection, &row, now).await?
         && matches!(
@@ -106,7 +106,7 @@ pub async fn refresh_charging(connection: &mut PgConnection, auction: Uuid) -> R
 pub async fn enforce(connection: &mut PgConnection, auction: Uuid) -> Result<bool> {
     let expired: Vec<Uuid> = sqlx::query_scalar(
         "SELECT account_id FROM auction_participants WHERE auction_id=$1 AND status='active'
-         AND EXISTS(SELECT 1 FROM auctions a WHERE a.id=$1 AND a.closes_at_ms<=$2)
+         AND EXISTS(SELECT 1 FROM auctions a WHERE a.id=$1 AND a.closes_at_ms-3600000<=$2)
          AND remaining_ms=0 AND (EXISTS(SELECT 1 FROM approval_messages m JOIN approval_sessions s ON s.id=m.session_id
              WHERE s.auction_id=$1 AND m.account_id=auction_participants.account_id AND s.status='active' AND m.status='ready')
              OR EXISTS(SELECT 1 FROM auctions a WHERE a.id=$1 AND a.execution='internal' AND a.status='awaiting_completion' AND a.seller_id=auction_participants.account_id))

@@ -102,8 +102,9 @@ export function DocsPage() {
               </span>
             </div>
             <p>
-              The seller sets a reserve and a bidding deadline. Each buyer can
-              submit one fixed bid. A bid qualifies at or above the reserve;
+              The seller sets a reserve and an auction end time. Bidding closes
+              one hour earlier; the final hour is for approvals only. Each buyer
+              can submit one fixed bid. A bid qualifies at or above the reserve;
               equal bids favor the earlier accepted bid. At most three buyers
               can join, and withdrawing does not free a place or allow reentry.
             </p>

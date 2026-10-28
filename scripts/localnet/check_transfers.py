@@ -101,7 +101,7 @@ def main():
             "request_id": str(uuid.uuid4()),
             "asset_id": asset,
             "reserve": "1.00000000",
-            "closes_at_ms": int(time.time() * 1000) + 15000,
+            "closes_at_ms": int(time.time() * 1000) + 3_600_000 + 15_000,
         },
     )
     path = f"/v1/auctions/{auction['id']}"

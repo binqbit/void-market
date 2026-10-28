@@ -13,9 +13,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 fn closing_time(now: i64, close: i64) -> Result<()> {
-    if close <= now || close.saturating_sub(now) > 30 * 24 * 60 * 60 * 1000 {
+    if close.saturating_sub(now) <= super::model::APPROVAL_WINDOW_MS
+        || close.saturating_sub(now) > 30 * 24 * 60 * 60 * 1000
+    {
         return Err(ApiError::BadRequest(
-            "Choose a closing time within the next 30 days",
+            "Choose an auction end more than one hour from now and within 30 days",
         ));
     }
     Ok(())
@@ -252,7 +254,7 @@ pub async fn publish(
         serde_json::Value::Null
     };
     let policy = inputs::digest(
-        "AUCTION_POLICY_V3",
+        "AUCTION_POLICY_V4",
         &(
             id,
             &snapshot,
@@ -264,6 +266,10 @@ pub async fn publish(
             "bid_ge_reserve",
             "earliest_admission",
             "early_masks_postclose_decryption",
+            (
+                "bids_close_before_auction_end",
+                super::model::APPROVAL_WINDOW_MS,
+            ),
             ("approval_budget_after_bidding_closes", 600_000),
             if auction.execution == "localnet" {
                 "native_payment_then_seller_ack_or_timeout"

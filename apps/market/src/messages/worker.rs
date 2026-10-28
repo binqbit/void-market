@@ -122,7 +122,7 @@ async fn prepare_session(state: &AppState) -> Result<bool> {
 
     let row: Option<SessionPreparation> = sqlx::query_as(
         "SELECT s.id, s.node_id, s.comparison, s.width, s.scope_hash,
-         CASE WHEN c.precomputed THEN a.closes_at_ms END AS release_at_ms
+         CASE WHEN c.precomputed THEN a.closes_at_ms-3600000 END AS release_at_ms
          FROM approval_sessions s LEFT JOIN auction_checks c ON c.session_id=s.id
          LEFT JOIN auctions a ON a.id=s.auction_id WHERE
          s.status='initializing' AND NOT EXISTS(SELECT 1 FROM approval_members m JOIN
