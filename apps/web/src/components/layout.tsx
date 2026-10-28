@@ -26,13 +26,17 @@ export function Layout() {
           <Brand />
           <nav className="main-nav" aria-label="Main navigation">
             <NavLink to="/" end>
-              Home
+              <span className="nav-label">Home</span>
             </NavLink>
-            <NavLink to="/market">Market</NavLink>
-            <NavLink to="/portfolio">My portfolio</NavLink>
+            <NavLink to="/market">
+              <span className="nav-label">Market</span>
+            </NavLink>
+            <NavLink to="/portfolio">
+              <span className="nav-label">My portfolio</span>
+            </NavLink>
             {profile && (
               <NavLink to="/messages">
-                Messages
+                <span className="nav-label">Messages</span>
                 <span
                   className="nav-message-count"
                   aria-label={
@@ -51,10 +55,12 @@ export function Layout() {
                 </span>
               </NavLink>
             )}
-            <NavLink to="/docs">Docs</NavLink>
+            <NavLink to="/docs">
+              <span className="nav-label">Docs</span>
+            </NavLink>
             {demo && (
               <NavLink to="/demo" className="demo-nav">
-                Demo
+                <span className="nav-label">Demo</span>
               </NavLink>
             )}
           </nav>

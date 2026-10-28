@@ -96,19 +96,22 @@
 .main-nav a.active {
   color: var(--text);
 }
-.main-nav a::after {
+.main-nav .nav-label {
+  position: relative;
+}
+.main-nav .nav-label::after {
   content: "";
   position: absolute;
-  right: 16px;
-  bottom: 2px;
-  left: 16px;
+  right: 0;
+  top: calc(50% + 20px);
+  left: 0;
   height: 2px;
   background: var(--accent);
   opacity: 0;
   box-shadow: 0 0 10px var(--aura);
   transition: opacity 0.18s;
 }
-.main-nav a.active::after {
+.main-nav a.active .nav-label::after {
   opacity: 1;
 }
 .header-actions {
