@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Start an isolated Docker localnet. Example: python3 scripts/localnet/compose.py up
 
-Commands preserve all retained chain and wallet data. No command deletes volumes.
+up, stop, status, logs and down preserve chain data, keys and Docker volumes.
+reset --yes removes this stack's containers, volumes and generated local state.
 The default web address is http://localhost:3100; the API uses localhost:8180.
 """
 
@@ -14,6 +15,7 @@ import subprocess
 import uuid
 from pathlib import Path
 
+from cleanup import reset_localnet
 from rpc import Rpc
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -62,11 +64,20 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("command", choices=["up", "stop", "status", "logs"])
+    parser.add_argument(
+        "command", choices=["up", "stop", "status", "logs", "down", "reset"]
+    )
     parser.add_argument("--state", type=Path, default=ROOT / ".localnet")
+    parser.add_argument(
+        "--yes", action="store_true", help="Confirm permanent deletion with reset"
+    )
     args = parser.parse_args()
+    if args.yes and args.command != "reset":
+        parser.error("--yes is only supported with reset")
+
     state = args.state.resolve()
-    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if args.command == "up":
+        state.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.umask(0o077)
     env_file = state / "compose.env"
     if env_file.exists():
@@ -113,15 +124,6 @@ def main():
     else:
         raise SystemExit("This localnet has not been initialized. Run up first.")
 
-    prepare_secret_files(state, values)
-    for name in (
-        "CUSTODY_MASTER_KEY_FILE",
-        "ARBITER_SIGNING_KEY_FILE",
-        "ARBITER_SERVICE_TOKEN_FILE",
-    ):
-        set_private_permissions(Path(values[name]), values)
-    save(env_file, values)
-
     project = values.get("COMPOSE_PROJECT_NAME")
     if not project:
         raise SystemExit("The retained Compose project name is missing.")
@@ -134,6 +136,17 @@ def main():
     )
 
     command = ["docker", "compose", "--env-file", str(env_file)]
+    if args.command in ("down", "reset"):
+        command += ["--project-name", project]
+
+        # Cleanup always targets the saved stack, regardless of shell overrides.
+        compose_environment.update(values)
+        for name in ("DATABASE_PASSWORD", "JWT_SECRET", "ARBITER_DATABASE_PASSWORD"):
+            file_variable = name + "_FILE"
+            compose_environment[file_variable] = values.get(
+                file_variable, str(state / "secrets" / name.lower())
+            )
+
     for filename in (
         "compose.yaml",
         "compose.arbiter.yaml",
@@ -146,6 +159,22 @@ def main():
         subprocess.run(
             command + list(arguments), cwd=ROOT, env=compose_environment, check=True
         )
+
+    if args.command == "reset":
+        reset_localnet(state, values, compose, confirmed=args.yes, project_root=ROOT)
+        return
+    if args.command == "down":
+        compose("down", "--remove-orphans")
+        return
+
+    prepare_secret_files(state, values)
+    for name in (
+        "CUSTODY_MASTER_KEY_FILE",
+        "ARBITER_SIGNING_KEY_FILE",
+        "ARBITER_SERVICE_TOKEN_FILE",
+    ):
+        set_private_permissions(Path(values[name]), values)
+    save(env_file, values)
 
     if args.command != "up":
         compose({"stop": "stop", "status": "ps", "logs": "logs"}[args.command])
