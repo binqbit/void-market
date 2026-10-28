@@ -63,7 +63,8 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "/opt/localnet/node.py", "health"]
-      interval: 10s
+      # Sample between the miner's ten-second idle blocks as the wallet catches up.
+      interval: 5s
       timeout: 10s
       retries: 60
       start_period: 30s
