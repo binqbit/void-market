@@ -1,4 +1,4 @@
-import { ArrowRight, Clock3, Layers3, Plus } from "lucide-react";
+import { Clock3, Layers3, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { message, request } from "../api/client";
@@ -20,7 +20,7 @@ import { useDemoMode } from "../demo/config";
 import { TransactionHistory } from "../portfolio/transaction-history";
 import { WithdrawDialog } from "../portfolio/withdraw-dialog";
 import { DepositDialog } from "../portfolio/deposit-dialog";
-import { loginHref } from "../auth/return-to";
+import { SignInRedirect } from "../auth/sign-in-redirect";
 
 export function PortfolioPage() {
   const { profile, loading, error, refresh } = useSession();
@@ -31,23 +31,7 @@ export function PortfolioPage() {
         <ErrorNotice retry={() => void refresh()}>{error}</ErrorNotice>
       </div>
     );
-  if (!profile)
-    return (
-      <section className="empty-state page-width signed-out">
-        <span className="empty-icon">
-          <Layers3 size={32} />
-        </span>
-        <span className="eyebrow">A SPACE THAT’S YOURS</span>
-        <h1>Your portfolio starts here.</h1>
-        <p>
-          Sign in to manage assets, receive transfers and see your ownership
-          history.
-        </p>
-        <Link className="button primary" to={loginHref("/portfolio")}>
-          Sign in to continue <ArrowRight size={17} />
-        </Link>
-      </section>
-    );
+  if (!profile) return <SignInRedirect />;
   return (
     <Portfolio
       key={profile.address}

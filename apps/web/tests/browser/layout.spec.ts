@@ -62,14 +62,21 @@ test("header stays fixed while changing pages and themes", async ({ page }) => {
     if (!(await navigation.isVisible()))
       await page.getByRole("button", { name: /Open navigation/ }).click();
     await navigation.getByRole("link", { name: label, exact: true }).click();
-    await expect(page).toHaveURL(path);
-    await expect(
-      navigation.getByRole("link", {
-        name: label,
-        exact: true,
-        includeHidden: true,
-      }),
-    ).toHaveAttribute("aria-current", "page");
+
+    if (path === "/portfolio") {
+      await expect(page).toHaveURL(/\/login\?next=%2Fportfolio$/);
+      await expect(navigation.locator('[aria-current="page"]')).toHaveCount(0);
+    } else {
+      await expect(page).toHaveURL(path);
+      await expect(
+        navigation.getByRole("link", {
+          name: label,
+          exact: true,
+          includeHidden: true,
+        }),
+      ).toHaveAttribute("aria-current", "page");
+    }
+
     const actual = await headerGeometry(page);
     actual.forEach((box, index) =>
       box.forEach((value, dimension) => {

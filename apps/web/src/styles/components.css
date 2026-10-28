@@ -160,9 +160,6 @@ dialog > p {
   color: var(--accent);
   text-decoration: underline;
 }
-.signed-out {
-  padding-block: 100px;
-}
 .sr-only {
   position: absolute;
   width: 1px;

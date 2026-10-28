@@ -38,7 +38,19 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
     let Some(token) = token(headers) else {
         return Ok(None);
     };
-    let claims = tokens::verify(&token, &state.config.jwt_secret)?;
+
+    // Invalid credentials mean a guest; infrastructure failures still propagate.
+    let hash = match token_hash(&token) {
+        Ok(hash) => hash,
+        Err(ApiError::Unauthorized) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let claims = match tokens::verify(&token, &state.config.jwt_secret) {
+        Ok(claims) => claims,
+        Err(ApiError::Unauthorized) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+
     let account: Option<Uuid> = sqlx::query_scalar(
         "SELECT s.account_id
          FROM sessions s
@@ -51,15 +63,13 @@ pub async fn optional(state: &AppState, headers: &HeaderMap) -> Result<Option<Pr
                  OR $2
              )",
     )
-    .bind(token_hash(&token)?)
+    .bind(hash)
     .bind(state.chains.is_some())
     .fetch_optional(&state.pool)
     .await?;
-    account
+    Ok(account
         .filter(|account| *account == claims.sub)
-        .map(Principal)
-        .map(Some)
-        .ok_or(ApiError::Unauthorized)
+        .map(Principal))
 }
 
 pub async fn issue(

@@ -1,5 +1,4 @@
 import { Inbox, ShieldCheck } from "lucide-react";
-import { Navigate } from "react-router-dom";
 import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
 import { MessageCard } from "../messages/message-card";
@@ -9,7 +8,7 @@ import { SaleCard } from "../messages/sale-card";
 import { TransactionCard } from "../demo/transaction-card";
 import { inboxEntries, needsApproval } from "../messages/inbox";
 import type { InboxEntry } from "../messages/inbox";
-import { loginHref } from "../auth/return-to";
+import { SignInRedirect } from "../auth/sign-in-redirect";
 import { AuctionOutcomes } from "../messages/auction-outcomes";
 import type { ApprovalMessage } from "../messages/types";
 
@@ -17,7 +16,15 @@ export function MessagesPage() {
   const session = useSession();
   const { snapshot, loading, error, refresh } = useMessages();
   if (session.loading) return <Loading>Loading your account…</Loading>;
-  if (!session.profile) return <Navigate to={loginHref("/messages")} replace />;
+  if (session.error)
+    return (
+      <div className="page-width page-content">
+        <ErrorNotice retry={() => void session.refresh()}>
+          {session.error}
+        </ErrorNotice>
+      </div>
+    );
+  if (!session.profile) return <SignInRedirect />;
   const pending = snapshot?.messages.filter(needsApproval) ?? [];
   const history =
     snapshot?.messages

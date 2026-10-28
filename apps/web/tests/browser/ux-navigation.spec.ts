@@ -70,6 +70,101 @@ async function setup(page: Page, signedIn = false) {
   return state;
 }
 
+test("guests can browse Market without a sign-in error or redirect", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.route("**/api/v1/auctions?*", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.goto("/market");
+  await expect(page.getByRole("heading", { name: "The market" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No open auctions." }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/market$/);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+for (const { destination, prompt, heading } of [
+  {
+    destination: "/portfolio?view=assets#holdings",
+    prompt: "Sign in to view your portfolio and auction activity.",
+    heading: "My portfolio",
+  },
+  {
+    destination: "/messages",
+    prompt: "Sign in to view your messages and approvals.",
+    heading: "Messages",
+  },
+  {
+    destination: "/account",
+    prompt: "Sign in to manage your profile.",
+    heading: "Your account",
+  },
+]) {
+  test(`${destination} explains sign-in and returns there after authentication`, async ({
+    page,
+  }) => {
+    await setup(page);
+    const privateRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/api\/v1\/(me\/|messages)/.test(request.url())) {
+        privateRequests.push(request.url());
+      }
+    });
+
+    await page.goto(destination);
+    await expect(page).toHaveURL(/\/login\?/);
+    expect(new URL(page.url()).searchParams.get("next")).toBe(destination);
+    const notice = page.getByRole("status").filter({ hasText: prompt });
+    await expect(notice).toBeVisible();
+    await expect(notice).not.toHaveClass(/error/);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Continue with Google" }),
+    ).toHaveAttribute(
+      "href",
+      `/api/v1/auth/google/start?next=${encodeURIComponent(destination)}`,
+    );
+    expect(privateRequests).toEqual([]);
+
+    await page.getByRole("button", { name: "Continue as Alice" }).click();
+    await expect(page).toHaveURL(
+      new URL(destination, "http://localhost:3000").href,
+    );
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading }),
+    ).toBeVisible();
+  });
+
+  test(`${destination} keeps genuine session failures visible and retryable`, async ({
+    page,
+  }) => {
+    await setup(page, true);
+    await page.route("**/api/v1/me", (route) =>
+      route.fulfill({ status: 503, json: { message: "Account unavailable" } }),
+    );
+    await page.goto(destination);
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Account unavailable" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(
+      new URL(destination, "http://localhost:3000").href,
+    );
+
+    await page.unroute("**/api/v1/me");
+    await page.route("**/api/v1/me", (route) =>
+      route.fulfill({ status: 401, json: { message: "Sign in first" } }),
+    );
+    await page.getByRole("button", { name: "Try again", exact: true }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: prompt }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}
+
 test("sign-in preserves the intended auction and rejects external return destinations", async ({
   page,
 }) => {

@@ -7,12 +7,20 @@ import { useDemoMode } from "../demo/config";
 import { DemoSwitcher } from "../demo/switcher";
 import { safeReturnTo } from "../auth/return-to";
 
+const signInPrompts: Record<string, string> = {
+  "/portfolio": "Sign in to view your portfolio and auction activity.",
+  "/messages": "Sign in to view your messages and approvals.",
+  "/account": "Sign in to manage your profile.",
+};
+
 export function LoginPage() {
   const { profile, loading } = useSession();
   const config = useRemote<{ google: boolean }>("/v1/auth/config");
   const [params] = useSearchParams();
   const demo = useDemoMode();
   const destination = safeReturnTo(params.get("next"));
+  const destinationPath = new URL(destination, window.location.origin).pathname;
+  const signInPrompt = params.has("next") && signInPrompts[destinationPath];
 
   if (loading) return <Loading>Checking your session…</Loading>;
   if (profile) return <Navigate to={destination} replace />;
@@ -37,6 +45,11 @@ export function LoginPage() {
       <section className="auth-panel panel">
         <span className="eyebrow">VOID MARKET ACCOUNT</span>
         <h2>Make yourself at home.</h2>
+        {signInPrompt && (
+          <div className="notice" role="status">
+            {signInPrompt}
+          </div>
+        )}
         <p className="muted">
           Sign in or create an account with Google. Then choose the username
           people will know you by.

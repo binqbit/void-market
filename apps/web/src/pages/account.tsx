@@ -1,22 +1,35 @@
 import { LogOut, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { message, post } from "../api/client";
 import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
-import { loginHref, safeReturnTo } from "../auth/return-to";
+import { safeReturnTo } from "../auth/return-to";
+import { SignInRedirect } from "../auth/sign-in-redirect";
 import { BiddingOverview } from "../account/bidding-overview";
 
 export function AccountPage() {
-  const { profile, loading, refresh, signOut } = useSession();
+  const {
+    profile,
+    loading,
+    error: sessionError,
+    refresh,
+    signOut,
+  } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (loading) return <Loading>Loading your account…</Loading>;
-  if (!profile) return <Navigate to={loginHref("/account")} replace />;
+  if (sessionError)
+    return (
+      <div className="page-width page-content">
+        <ErrorNotice retry={() => void refresh()}>{sessionError}</ErrorNotice>
+      </div>
+    );
+  if (!profile) return <SignInRedirect />;
 
   const displayName =
     !profile.username && profile.name === "New member" ? "" : profile.name;

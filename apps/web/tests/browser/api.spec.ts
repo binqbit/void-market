@@ -108,9 +108,13 @@ test("real API: image upload, asset ownership, transfer receipt and sign-out", a
   await page.goto("/account");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.goto("/portfolio");
+  await expect(page).toHaveURL(/\/login\?next=%2Fportfolio$/);
   await expect(
-    page.getByRole("heading", { name: "Your portfolio starts here." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "Sign in to view your portfolio" }),
   ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expect(
     (await page.context().cookies()).find(
       (cookie) => cookie.name === "market_session",

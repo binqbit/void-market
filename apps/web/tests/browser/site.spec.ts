@@ -44,6 +44,9 @@ const asset = {
 };
 
 async function publicApi(page: Page) {
+  await page.route("**/api/v1/auctions?*", (route) =>
+    route.fulfill({ json: [] }),
+  );
   await page.route("**/api/v1/me", (route) =>
     route.fulfill({ status: 401, json: { message: "Sign in first" } }),
   );
@@ -84,7 +87,7 @@ test("navigation, dark default and explicit theme survive reload without overflo
 
   for (const [link, heading] of [
     ["Market", "The market"],
-    ["My portfolio", "Your portfolio starts here."],
+    ["My portfolio", "A space for your assets."],
     ["Docs", "Understand Void Market"],
   ]) {
     if (!(await page.locator("#main-navigation").isVisible()))
@@ -93,7 +96,9 @@ test("navigation, dark default and explicit theme survive reload without overflo
       .getByRole("navigation", { name: "Main navigation" })
       .getByRole("link", { name: link, exact: true })
       .click();
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading, exact: true }),
+    ).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -139,12 +144,13 @@ test("an expired session returns the portfolio to sign-in", async ({
     route.fulfill({ status: 401, json: { message: "Sign in first" } }),
   );
   await page.goto("/portfolio");
+  await expect(page).toHaveURL(/\/login\?next=%2Fportfolio$/);
   await expect(
-    page.getByRole("heading", { name: "Your portfolio starts here." }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "Sign in to view your portfolio" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Sign in to continue" }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("a late profile response cannot restore an expired session", async ({
@@ -165,8 +171,8 @@ test("a late profile response cannot restore an expired session", async ({
   );
 
   await page.goto("/portfolio");
-  const signedOut = page.getByRole("heading", {
-    name: "Your portfolio starts here.",
+  const signedOut = page.getByRole("status").filter({
+    hasText: "Sign in to view your portfolio",
   });
   await expect(signedOut).toBeVisible();
 
@@ -175,6 +181,8 @@ test("a late profile response cannot restore an expired session", async ({
   await lateResponse;
   await page.waitForLoadState("networkidle");
   await expect(signedOut).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?next=%2Fportfolio$/);
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("transfer confirmation and recovery reuse the same request after a lost response", async ({
