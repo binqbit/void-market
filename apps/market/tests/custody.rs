@@ -20,6 +20,23 @@ fn custody_records_bind_account_purpose_and_authenticate_ciphertext() {
     );
     assert!(vault.open(Uuid::new_v4(), "signing-key", &sealed).is_err());
     assert!(vault.open(account, "he-key", &sealed).is_err());
+    let fingerprint = vault.fingerprint(account, "auction-create", b"1.25000000");
+    assert_eq!(
+        fingerprint,
+        vault.fingerprint(account, "auction-create", b"1.25000000")
+    );
+    assert_ne!(
+        fingerprint,
+        vault.fingerprint(Uuid::new_v4(), "auction-create", b"1.25000000")
+    );
+    assert_ne!(
+        fingerprint,
+        vault.fingerprint(account, "other-purpose", b"1.25000000")
+    );
+    assert_ne!(
+        fingerprint,
+        vault.fingerprint(account, "auction-create", b"1.25000001")
+    );
     let mut changed = sealed;
     *changed.last_mut().unwrap() ^= 1;
     assert!(vault.open(account, "signing-key", &changed).is_err());
