@@ -166,7 +166,14 @@ async fn native_auction_keeps_tied_bids_private_and_delivers_once_after_seller_a
     assert_eq!(final_state["checks_completed"], 3);
     assert_eq!(final_state["payment_status"], "unverified");
     assert!(fixture.get(Some(2), &detail_path).await["agreed_price"].is_null());
-    assert!(fixture.get(None, &detail_path).await["agreed_price"].is_null());
+    let public_response = fixture
+        .client
+        .get(format!("{}{detail_path}", fixture.url))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(public_response.status(), StatusCode::NOT_FOUND);
+
     let seller = fixture.get(Some(0), "/v1/messages").await;
     assert_eq!(seller["sales"].as_array().unwrap().len(), 1);
     let request = &seller["sales"][0];
