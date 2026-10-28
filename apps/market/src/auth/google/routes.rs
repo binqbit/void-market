@@ -27,8 +27,18 @@ pub async fn config(state: web::Data<AppState>) -> HttpResponse {
         .json(json!({ "google": state.config.google.is_some(), "demo": state.chains.is_some() }))
 }
 
-pub async fn start(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
+#[derive(Deserialize)]
+pub struct Start {
+    next: Option<String>,
+}
+
+pub async fn start(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    query: web::Query<Start>,
+) -> Result<HttpResponse> {
     let config = state.config.google.as_ref().ok_or(ApiError::Unavailable)?;
+    let return_to = return_path(query.next.as_deref());
     let id = random()?;
     let nonce = random()?;
     let verifier = random()?;
@@ -47,6 +57,7 @@ pub async fn start(state: web::Data<AppState>, request: HttpRequest) -> Result<H
             Flow {
                 nonce: nonce.clone(),
                 verifier,
+                return_to,
                 expires: Instant::now() + FLOW_TTL,
             },
         );
@@ -83,19 +94,36 @@ pub async fn callback(
     request: HttpRequest,
     query: web::Query<Callback>,
 ) -> HttpResponse {
+    let failed_return_to = request
+        .cookie(STATE_COOKIE)
+        .and_then(|cookie| (query.state.as_deref() == Some(cookie.value())).then_some(cookie))
+        .and_then(|cookie| {
+            state
+                .google
+                .flows
+                .lock()
+                .ok()?
+                .get(cookie.value())
+                .map(|flow| flow.return_to.clone())
+        });
     let result = finish(&state, &request, &query).await;
     let mut response = HttpResponse::SeeOther();
     response.insert_header((header::CACHE_CONTROL, "no-store"));
     response.insert_header(("Referrer-Policy", "no-referrer"));
     response.cookie(state_cookie("", state.config.secure_cookie, 0));
     match result {
-        Ok(cookie) => {
+        Ok((cookie, destination)) => {
             response
-                .insert_header((header::LOCATION, "/account"))
+                .insert_header((header::LOCATION, destination))
                 .append_header((header::SET_COOKIE, cookie));
         }
         Err(_) => {
-            response.insert_header((header::LOCATION, "/login?error=google"));
+            let mut destination = url::form_urlencoded::Serializer::new(String::new());
+            destination.append_pair("error", "google");
+            if let Some(path) = failed_return_to.filter(|path| path != "/portfolio") {
+                destination.append_pair("next", &path);
+            }
+            response.insert_header((header::LOCATION, format!("/login?{}", destination.finish())));
         }
     }
     response.finish()
@@ -105,7 +133,7 @@ async fn finish(
     state: &AppState,
     request: &HttpRequest,
     query: &Callback,
-) -> Result<header::HeaderValue> {
+) -> Result<(header::HeaderValue, String)> {
     let config = state.config.google.as_ref().ok_or(ApiError::Unavailable)?;
     let id = query.state.as_deref().ok_or(ApiError::Unauthorized)?;
     if request.cookie(STATE_COOKIE).as_ref().map(Cookie::value) != Some(id) {
@@ -147,9 +175,9 @@ async fn finish(
 
     let mut tx = state.pool.begin().await?;
     // A Google subject identifies the account. Matching email alone never links identities.
-    let account: Uuid = sqlx::query_scalar(
+    let (account, username): (Uuid, Option<String>) = sqlx::query_as(
         "INSERT INTO accounts(id, name, google_subject, email) VALUES($1, $2, $3, lower($4))
-         ON CONFLICT (google_subject) DO UPDATE SET email = EXCLUDED.email RETURNING id",
+         ON CONFLICT (google_subject) DO UPDATE SET email = EXCLUDED.email RETURNING id, username",
     )
     .bind(Uuid::new_v4())
     .bind("New member")
@@ -168,7 +196,48 @@ async fn finish(
     )
     .await?;
     tx.commit().await?;
-    Ok(cookie)
+    let destination = if username.is_some() {
+        flow.return_to
+    } else {
+        let mut url = Url::parse("https://void.invalid/account").map_err(|_| ApiError::Internal)?;
+        url.query_pairs_mut().append_pair("next", &flow.return_to);
+        format!("/account?{}", url.query().unwrap_or_default())
+    };
+    Ok((cookie, destination))
+}
+
+fn return_path(value: Option<&str>) -> String {
+    let fallback = "/portfolio".to_owned();
+    let Some(value) = value else { return fallback };
+    if !value.starts_with('/')
+        || value.starts_with("//")
+        || value.contains('\\')
+        || value.len() > 2048
+        || value.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return fallback;
+    }
+    let Ok(base) = Url::parse("https://void.invalid") else {
+        return fallback;
+    };
+    let Ok(url) = base.join(value) else {
+        return fallback;
+    };
+    let known = [
+        "/",
+        "/market",
+        "/portfolio",
+        "/messages",
+        "/account",
+        "/demo",
+        "/docs",
+    ];
+    if url.origin() != base.origin()
+        || (!known.contains(&url.path()) && !url.path().starts_with("/market/"))
+    {
+        return fallback;
+    }
+    url[url::Position::BeforePath..].to_owned()
 }
 
 #[derive(Deserialize)]

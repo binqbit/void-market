@@ -16,6 +16,7 @@ const FLOW_TTL: Duration = Duration::from_secs(300);
 struct Flow {
     nonce: String,
     verifier: String,
+    return_to: String,
     expires: Instant,
 }
 

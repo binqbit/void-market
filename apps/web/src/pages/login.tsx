@@ -5,15 +5,17 @@ import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
 import { useDemoMode } from "../demo/config";
 import { DemoSwitcher } from "../demo/switcher";
+import { safeReturnTo } from "../auth/return-to";
 
 export function LoginPage() {
   const { profile, loading } = useSession();
   const config = useRemote<{ google: boolean }>("/v1/auth/config");
   const [params] = useSearchParams();
   const demo = useDemoMode();
+  const destination = safeReturnTo(params.get("next"));
 
   if (loading) return <Loading>Checking your session…</Loading>;
-  if (profile) return <Navigate to="/portfolio" replace />;
+  if (profile) return <Navigate to={destination} replace />;
 
   return (
     <div className="auth-layout page-width">
@@ -49,7 +51,10 @@ export function LoginPage() {
         ) : config.error ? (
           <ErrorNotice retry={config.retry}>{config.error}</ErrorNotice>
         ) : config.data?.google ? (
-          <a className="button google-button" href="/api/v1/auth/google/start">
+          <a
+            className="button google-button"
+            href={`/api/v1/auth/google/start?next=${encodeURIComponent(destination)}`}
+          >
             <img src="/icons/google.svg" width={20} height={20} alt="" />
             <span>Continue with Google</span>
           </a>

@@ -1,19 +1,21 @@
 import { LogOut, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { message, post } from "../api/client";
 import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
+import { loginHref, safeReturnTo } from "../auth/return-to";
 
 export function AccountPage() {
   const { profile, loading, refresh, signOut } = useSession();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (loading) return <Loading>Loading your account…</Loading>;
-  if (!profile) return <Navigate to="/login" replace />;
+  if (!profile) return <Navigate to={loginHref("/account")} replace />;
 
   const displayName =
     !profile.username && profile.name === "New member" ? "" : profile.name;
@@ -30,6 +32,10 @@ export function AccountPage() {
         username: fields.get("username"),
       });
       await refresh();
+      if (params.has("next")) {
+        navigate(safeReturnTo(params.get("next")), { replace: true });
+        return;
+      }
       setNotice("Your profile has been saved.");
     } catch (failure) {
       setError(message(failure));
@@ -116,11 +122,21 @@ export function AccountPage() {
         </section>
         <section className="panel account-access">
           <h2>Account access</h2>
-          <p className="muted">Signed in with Google.</p>
-          <p className="account-email">{profile.email}</p>
-          <p className="field-help">
-            Your email is only shown to you, not on your public profile.
+          <p className="muted">
+            {profile.is_demo
+              ? "Signed in with a local demo account."
+              : profile.email
+                ? "Signed in with Google."
+                : "Signed in to your account."}
           </p>
+          {profile.email && (
+            <>
+              <p className="account-email">{profile.email}</p>
+              <p className="field-help">
+                Your email is only shown to you, not on your public profile.
+              </p>
+            </>
+          )}
           <button
             className="button quiet"
             onClick={() => void logout()}

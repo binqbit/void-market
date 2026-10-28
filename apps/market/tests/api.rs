@@ -148,6 +148,44 @@ async fn google_flow_binds_state_to_browser_and_uses_pkce() {
             .unwrap()
             .contains("Max-Age=0")
     );
+    for (next, retained) in [
+        ("/market/example", true),
+        ("//example.org", false),
+        ("https://example.org", false),
+    ] {
+        let path = format!(
+            "/v1/auth/google/start?next={}",
+            url::form_urlencoded::byte_serialize(next.as_bytes()).collect::<String>()
+        );
+        let (_, headers, _) = fixture.request("GET", &path, None, Value::Null).await;
+        let url =
+            url::Url::parse(headers.get(header::LOCATION).unwrap().to_str().unwrap()).unwrap();
+        let state = url
+            .query_pairs()
+            .find(|(key, _)| key == "state")
+            .unwrap()
+            .1
+            .into_owned();
+        let cookie = headers
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        let (_, response, _) = fixture
+            .request(
+                "GET",
+                &format!("/v1/auth/google/callback?state={state}&error=access_denied"),
+                Some(cookie),
+                Value::Null,
+            )
+            .await;
+        let location = response.get(header::LOCATION).unwrap().to_str().unwrap();
+        assert_eq!(location.contains("next="), retained);
+        assert!(location.starts_with("/login?error=google"));
+    }
     fixture.cleanup().await;
 }
 

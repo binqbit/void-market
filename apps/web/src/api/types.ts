@@ -6,6 +6,7 @@ export interface Account {
 
 export interface Profile extends Account {
   email: string | null;
+  is_demo?: boolean;
 }
 
 export interface Asset {

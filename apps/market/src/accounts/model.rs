@@ -14,6 +14,7 @@ pub struct Profile {
     pub name: String,
     pub username: Option<String>,
     pub email: Option<String>,
+    pub is_demo: bool,
 }
 
 #[derive(Deserialize)]
