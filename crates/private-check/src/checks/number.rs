@@ -1,12 +1,21 @@
 use crate::values::CiphertextArtifact;
 use crate::{CheckError, CheckSession, Digest, NumberInput, Result};
-use tfhe_math::{KeyBinding, PublicValue, Width, codec::EncodedObject};
+use tfhe_math::{KeyBinding, MathSession, PublicValue, TfheValue, Width, codec::EncodedObject};
 
 pub fn validate_public_number(width: Width, value: u64) -> Result<()> {
     if value > width.maximum() / 2 {
         return Err(CheckError::NumberOutOfRange);
     }
     Ok(())
+}
+
+pub(crate) fn encrypted_range_check(
+    math: &MathSession,
+    width: Width,
+    value: &TfheValue,
+) -> Result<CiphertextArtifact> {
+    let limit = PublicValue::uint(width, width.maximum() / 2)?;
+    CiphertextArtifact::from_value(math.le(value, &limit.into())?)
 }
 
 /// Fixed input-domain predicate. Only the key owner may decrypt its Boolean value.
@@ -44,14 +53,11 @@ impl CheckSession {
         } else {
             return Err(CheckError::ReferenceMismatch);
         };
-        let limit = PublicValue::uint(self.context.width(), self.context.width().maximum() / 2)?;
-        let value = domain.math().le(&input.value, &limit.into())?;
-
         Ok(EncryptedNumberCheck {
             context: self.context.id,
             input: input.binding.native,
             key: domain.binding(),
-            artifact: CiphertextArtifact::from_value(value)?,
+            artifact: encrypted_range_check(&domain.math(), self.context.width(), &input.value)?,
         })
     }
 }

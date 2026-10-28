@@ -13,6 +13,18 @@ pub(crate) fn decode(
     openings: [&OwnerMaskOpening; 2],
     expected: &CheckContext,
 ) -> Result<bool> {
+    verify_committed_answer(prepared, commitment, answer, expected)?;
+    let encoded = remove_owner_masks(prepared, answer, openings, expected)?;
+
+    prepared.masks.masks.decode(expected.width(), *encoded)
+}
+
+fn verify_committed_answer(
+    prepared: &PreparedComparison,
+    commitment: AnswerCommitment,
+    answer: &MaskedBooleanAnswer,
+    expected: &CheckContext,
+) -> Result<()> {
     expected.check_id(prepared.challenge.binding.context)?;
     expected.check_id(answer.context)?;
     expected.check_id(commitment.context)?;
@@ -26,6 +38,15 @@ pub(crate) fn decode(
         return Err(CheckError::CommitmentMismatch);
     }
 
+    Ok(())
+}
+
+fn remove_owner_masks(
+    prepared: &PreparedComparison,
+    answer: &MaskedBooleanAnswer,
+    openings: [&OwnerMaskOpening; 2],
+    expected: &CheckContext,
+) -> Result<Zeroizing<u64>> {
     if openings[0].binding.owner == openings[1].binding.owner {
         return Err(CheckError::InvalidOwner);
     }
@@ -54,7 +75,7 @@ pub(crate) fn decode(
         *inner ^= *opening.pad;
     }
 
-    prepared.masks.masks.decode(expected.width(), *inner)
+    Ok(inner)
 }
 
 impl CheckSession {

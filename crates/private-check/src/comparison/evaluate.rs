@@ -1,12 +1,12 @@
-use super::masks::PreparedBooleanMasks;
 use super::owner_masks::{OwnerContributionBinding, OwnerMaskContribution};
-use crate::checks::commitments;
+use super::{encoding, masks::PreparedBooleanMasks};
+use crate::checks::{commitments, number::encrypted_range_check};
 use crate::values::CiphertextArtifact;
 use crate::{
     CheckContext, CheckError, CheckSession, Comparison, Digest, NumberInput, Result,
     TransferredNumber,
 };
-use tfhe_math::{DataType, EvaluationContext, PublicValue, codec::EncodedObject};
+use tfhe_math::{DataType, EvaluationContext, MathSession, TfheValue, codec::EncodedObject};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BooleanChallengeBinding {
@@ -131,29 +131,15 @@ impl CheckSession {
 
         let math = self.target.math();
         let (x, v) = (&transferred.value, &target.value);
-        let bit = match self.context.comparison {
-            Comparison::Equal => math.eq(x, v)?,
-            Comparison::NotEqual => math.ne(x, v)?,
-            Comparison::Less => math.lt(x, v)?,
-            Comparison::LessOrEqual => math.le(x, v)?,
-            Comparison::Greater => math.gt(x, v)?,
-            Comparison::GreaterOrEqual => math.ge(x, v)?,
-        };
-
         let width = self.context.width();
-        let numeric_bit = math.bool_to_uint(&bit, width)?;
-        let product = math.mul_in_width(width, &numeric_bit, &masks.encrypted[0].value)?;
-        let sum = math.add_in_width(width, &product.value, &masks.encrypted[1].value)?;
-        let base = math.xor(&sum.value, &masks.encrypted[2].value)?;
-        let first_pad = math.xor(&base, &owners[0].artifact.value)?;
-        let protected = math.xor(&first_pad, &owners[1].artifact.value)?;
-
-        let limit = PublicValue::uint(width, width.maximum() / 2)?.into();
+        let bit = compare_values(&math, self.context.comparison, x, v)?;
+        let protected = encoding::protect(&math, width, &bit, &masks, owners)?;
         let number_checks = [
-            CiphertextArtifact::from_value(math.le(x, &limit)?)?,
-            CiphertextArtifact::from_value(math.le(v, &limit)?)?,
+            encrypted_range_check(&math, width, x)?,
+            encrypted_range_check(&math, width, v)?,
         ];
-        let artifact = CiphertextArtifact::from_value(protected)?;
+
+        let artifact = protected.artifact;
         let binding = BooleanChallengeBinding {
             context: self.context.id,
             base: masks.commitment,
@@ -169,10 +155,7 @@ impl CheckSession {
             },
             owners: [owners[0].binding, owners[1].binding],
             masks,
-            arithmetic_checks: [
-                CiphertextArtifact::from_value(product.flag)?,
-                CiphertextArtifact::from_value(sum.flag)?,
-            ],
+            arithmetic_checks: protected.arithmetic_checks,
             number_checks,
         })
     }
@@ -200,4 +183,20 @@ impl CheckSession {
             Ok([second, first])
         }
     }
+}
+
+fn compare_values(
+    math: &MathSession,
+    comparison: Comparison,
+    left: &TfheValue,
+    right: &TfheValue,
+) -> Result<TfheValue> {
+    Ok(match comparison {
+        Comparison::Equal => math.eq(left, right)?,
+        Comparison::NotEqual => math.ne(left, right)?,
+        Comparison::Less => math.lt(left, right)?,
+        Comparison::LessOrEqual => math.le(left, right)?,
+        Comparison::Greater => math.gt(left, right)?,
+        Comparison::GreaterOrEqual => math.ge(left, right)?,
+    })
 }
