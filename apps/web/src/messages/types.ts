@@ -25,6 +25,7 @@ export interface ApprovalMessage {
 }
 
 export interface MessageSnapshot {
+  transactions?: import("../demo/types").NativeTransaction[];
   custody_mode: "development" | "disabled";
   revision: number;
   server_time_ms: number;

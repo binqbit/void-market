@@ -13,6 +13,7 @@ export function CompleteSaleButton({
   title,
   price,
   buyer,
+  paymentStatus = "unverified",
   onComplete,
 }: {
   id: string;
@@ -21,6 +22,7 @@ export function CompleteSaleButton({
   title: string;
   price: string;
   buyer: Account;
+  paymentStatus?: string;
   onComplete: () => void;
 }) {
   const { refresh } = useMessages();
@@ -83,8 +85,9 @@ export function CompleteSaleButton({
             </div>
           </dl>
           <p>
-            This transfers ownership inside Void Market. Payment has not been
-            processed or verified. The transfer cannot be undone.
+            {paymentStatus === "confirmed"
+              ? "The local Zcash payment is confirmed. Approve delivery of the NFT from the arbiter to the buyer. If your remaining time expires, delivery proceeds under the terms accepted at publication."
+              : "This transfers ownership inside Void Market. Payment has not been processed or verified. The transfer cannot be undone."}
           </p>
           <label className="auction-consent">
             <input
@@ -95,7 +98,11 @@ export function CompleteSaleButton({
                 setConsentFor(event.target.checked ? context : null)
               }
             />
-            <span>I approve this transfer with payment unverified.</span>
+            <span>
+              {paymentStatus === "confirmed"
+                ? "I approve delivery of the paid NFT."
+                : "I approve this transfer with payment unverified."}
+            </span>
           </label>
           {error && <ErrorNotice>{error}</ErrorNotice>}
           <div className="dialog-actions">

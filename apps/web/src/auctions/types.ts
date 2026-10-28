@@ -2,6 +2,7 @@ import type { Account } from "../api/types";
 
 export type AuctionStatus =
   | "draft"
+  | "deposit_pending"
   | "open"
   | "matching"
   | "awaiting_completion"
@@ -23,8 +24,11 @@ export interface Auction {
   status: AuctionStatus;
   reason: string | null;
   currency: "ZEC";
-  execution: "development_custody";
-  payment_status: "unverified";
+  execution: "development_custody" | "localnet_custody";
+  payment_status: "unverified" | "pending" | "confirmed" | "review";
+  custody_status?: string;
+  settlement_note?: string | null;
+  payment?: { expected: string; paid: string; remaining: string } | null;
   wallet_ready: boolean;
   closes_at_ms: number;
   created_at_ms: number;
@@ -59,6 +63,7 @@ export interface Auction {
 }
 
 export interface SaleRequest {
+  payment_status?: string;
   auction_id: string;
   request_id: string;
   generation: number;
@@ -71,6 +76,7 @@ export interface SaleRequest {
 
 export const statusLabels: Record<AuctionStatus, string> = {
   draft: "Draft",
+  deposit_pending: "Awaiting NFT deposit",
   open: "Open for bids",
   matching: "Checking bids",
   awaiting_completion: "Awaiting seller",

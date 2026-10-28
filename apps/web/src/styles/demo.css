@@ -1,0 +1,177 @@
+.demo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #dabb69;
+  border: 1px solid #dabb6940;
+  background: #dabb6910;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 650;
+}
+.local-nft-image {
+  object-fit: contain;
+  background: #0b0d11;
+}
+.main-nav a.demo-nav {
+  color: #dabb69;
+}
+.main-nav a.demo-nav.active::after {
+  background: #dabb69;
+}
+.demo-notice {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: var(--muted);
+  padding: 18px 22px;
+  border: 1px solid #dabb6933;
+  border-radius: 12px;
+  margin-bottom: 28px;
+  background: #dabb6908;
+}
+.demo-notice svg {
+  color: #dabb69;
+  flex-shrink: 0;
+}
+.demo-notice p {
+  margin: 0;
+}
+.demo-account,
+.demo-guide {
+  padding: 28px;
+  margin-bottom: 28px;
+}
+.demo-identity-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.demo-identity-buttons .selected {
+  border-color: #dabb6970;
+  color: #dabb69;
+  opacity: 1;
+}
+.demo-resources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  margin-top: 24px;
+}
+.demo-balance {
+  display: block;
+  font:
+    500 30px "Space Grotesk",
+    sans-serif;
+  margin-top: 6px;
+}
+.demo-resource-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.demo-resources .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+.demo-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 40px;
+  padding-left: 22px;
+  margin: 28px 0;
+}
+.demo-steps li {
+  padding-left: 8px;
+}
+.demo-steps li::marker {
+  color: #dabb69;
+  font-family: ui-monospace, monospace;
+}
+.demo-steps p {
+  color: var(--muted);
+  margin: 6px 0 12px;
+}
+.demo-current-auction {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.demo-current-auction > .quiet-button {
+  margin-left: 15px;
+}
+.demo-transactions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.native-transaction {
+  padding: 24px;
+  min-width: 0;
+}
+.native-transaction h3 {
+  font-size: 21px;
+  margin: 12px 0 8px;
+}
+.native-transaction p {
+  color: var(--muted);
+}
+.native-transaction .native-amount {
+  color: var(--text);
+  font:
+    500 25px "Space Grotesk",
+    sans-serif;
+}
+.native-amount span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.native-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+.native-links code {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.partial-payment {
+  margin-top: 20px;
+}
+.partial-payment summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.partial-payment input {
+  margin: 8px 0 12px;
+}
+@media (max-width: 700px) {
+  .demo-account,
+  .demo-guide {
+    padding: 22px 18px;
+  }
+  .demo-steps,
+  .demo-transactions {
+    grid-template-columns: 1fr;
+  }
+  .demo-identity-buttons .button {
+    flex: 1 1 140px;
+  }
+  .main-nav {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+  .main-nav a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}

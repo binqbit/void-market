@@ -10,6 +10,8 @@ import { BidForm } from "../auctions/bid-form";
 import { CompleteSaleButton } from "../auctions/complete-button";
 import { DraftEditor } from "../auctions/draft-editor";
 import { WithdrawBidButton } from "../auctions/withdraw-button";
+import { useMessages } from "../messages/provider";
+import { TransactionCard } from "../demo/transaction-card";
 
 const reasons: Record<string, string> = {
   no_remaining_buyers:
@@ -29,6 +31,7 @@ const reasons: Record<string, string> = {
 export function AuctionPage() {
   const { id } = useParams();
   const session = useSession();
+  const messages = useMessages();
   const query = useAuctionQuery<Auction>(
     session.loading ? null : `/v1/auctions/${id}`,
   );
@@ -44,6 +47,10 @@ export function AuctionPage() {
     );
   const auction = query.data;
   const own = auction.participation;
+  const native = auction.execution === "localnet_custody";
+  const transactions = (messages.snapshot?.transactions ?? []).filter(
+    (item) => item.auction_id === auction.id,
+  );
   return (
     <div className="page-width page-content auction-page">
       <Link className="text-link" to="/market">
@@ -136,14 +143,16 @@ export function AuctionPage() {
             )}
             {auction.status === "awaiting_completion" && (
               <p>
-                The asset is locked until the seller approves the transfer.
-                Payment remains unverified.
+                {native
+                  ? "The NFT is held by the registered arbiter. Full confirmed ZEC payment is required before delivery."
+                  : "The asset is locked until the seller approves the transfer. Payment remains unverified."}
               </p>
             )}
             {auction.status === "completed" && (
               <p>
-                Ownership was transferred inside Void Market. Payment remains
-                unverified.
+                {native
+                  ? "Zcash payment and Ethereum NFT delivery are confirmed on the local networks."
+                  : "Ownership was transferred inside Void Market. Payment remains unverified."}
               </p>
             )}
             {auction.actions.complete &&
@@ -157,6 +166,7 @@ export function AuctionPage() {
                   title={auction.asset.name}
                   price={auction.agreed_price}
                   buyer={auction.winner}
+                  paymentStatus={auction.payment_status}
                   onComplete={query.refresh}
                 />
               )}
@@ -168,6 +178,28 @@ export function AuctionPage() {
               />
             )}
           </section>
+          {native && (
+            <section className="panel auction-summary">
+              <h3>Local settlement</h3>
+              <p>
+                NFT:{" "}
+                {(auction.custody_status ?? "pending").replaceAll("_", " ")}
+              </p>
+              <p>Payment: {auction.payment_status}</p>
+              {auction.payment && (
+                <p>
+                  Paid {auction.payment.paid} / {auction.payment.expected} ZEC.
+                  Remaining: {auction.payment.remaining} ZEC.
+                </p>
+              )}
+              {auction.settlement_note && (
+                <p className="notice">{auction.settlement_note}</p>
+              )}
+            </section>
+          )}
+          {transactions.map((item) => (
+            <TransactionCard key={item.id} item={item} />
+          ))}
           {auction.actions.edit && (
             <DraftEditor auction={auction} onComplete={query.refresh} />
           )}
@@ -182,8 +214,9 @@ export function AuctionPage() {
           <div className="custody-note">
             <ShieldCheck size={17} />
             <span>
-              Development custody · Prices in ZEC. No blockchain payments or
-              external asset transfers.
+              {native
+                ? "Localnet custody · Real local Ethereum and Zcash transactions. The two transfers are not atomic."
+                : "Development custody · Prices in ZEC. No blockchain payments or external asset transfers."}
             </span>
           </div>
           <details className="auction-rules">
@@ -201,12 +234,14 @@ export function AuctionPage() {
                 auction. Service waits pause the budget.
               </li>
               <li>
-                Withdrawal or approval expiry may select a different surviving
-                buyer. Bids are not funded or guaranteed.
+                {native
+                  ? "Before payment authorization, a withdrawal or missed approval may select another surviving buyer. Once payment is authorized, the winner is fixed."
+                  : "Withdrawal or approval expiry may select a different surviving buyer. Bids are not funded or guaranteed."}
               </li>
               <li>
-                The seller confirms the final internal transfer with payment
-                unverified.
+                {native
+                  ? "Pay the full invoice before your shared deadline. Partial payments require a top-up and are not automatically refunded. After full payment, seller approval or seller timeout releases the NFT."
+                  : "The seller confirms the final internal transfer with payment unverified."}
               </li>
             </ul>
           </details>

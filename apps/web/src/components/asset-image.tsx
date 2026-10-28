@@ -9,7 +9,11 @@ export function AssetImage({
   name: string;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
-  const source = image ? `/api/v1/media/${encodeURIComponent(image)}` : null;
+  const source = image
+    ? /^demo:[0-5]$/.test(image)
+      ? `/api/v1/demo/images/${image.slice(5)}`
+      : `/api/v1/media/${encodeURIComponent(image)}`
+    : null;
   if (!source || failed === source) {
     return (
       <div className="asset-image image-fallback">
@@ -20,7 +24,7 @@ export function AssetImage({
   }
   return (
     <img
-      className="asset-image"
+      className={`asset-image${image?.startsWith("demo:") ? " local-nft-image" : ""}`}
       src={source}
       alt={name}
       loading="lazy"

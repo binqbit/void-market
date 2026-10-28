@@ -6,6 +6,7 @@ import { MessageCard } from "../messages/message-card";
 import { SessionCard } from "../messages/session-card";
 import { useMessages } from "../messages/provider";
 import { SaleCard } from "../messages/sale-card";
+import { TransactionCard } from "../demo/transaction-card";
 
 export function MessagesPage() {
   const session = useSession();
@@ -28,6 +29,10 @@ export function MessagesPage() {
       (item) => !pending.some((message) => message.session_id === item.id),
     ) ?? [];
   const sales = snapshot?.sales ?? [];
+  const native =
+    snapshot?.transactions?.filter(
+      (item) => !["confirmed", "cancelled"].includes(item.status),
+    ) ?? [];
 
   return (
     <div className="page-width page-content messages-page">
@@ -56,8 +61,11 @@ export function MessagesPage() {
       {error && <ErrorNotice retry={() => void refresh()}>{error}</ErrorNotice>}
       {loading && !snapshot ? (
         <Loading>Loading messages…</Loading>
-      ) : pending.length || sales.length ? (
+      ) : pending.length || sales.length || native.length ? (
         <section className="message-list" aria-label="Awaiting your approval">
+          {native.map((item) => (
+            <TransactionCard key={item.id} item={item} />
+          ))}
           {sales.map((item) => (
             <SaleCard key={item.auction_id} item={item} />
           ))}

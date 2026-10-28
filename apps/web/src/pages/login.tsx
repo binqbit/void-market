@@ -3,11 +3,14 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { useRemote } from "../api/use-remote";
 import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
+import { useDemoMode } from "../demo/config";
+import { DemoSwitcher } from "../demo/switcher";
 
 export function LoginPage() {
   const { profile, loading } = useSession();
   const config = useRemote<{ google: boolean }>("/v1/auth/config");
   const [params] = useSearchParams();
+  const demo = useDemoMode();
 
   if (loading) return <Loading>Checking your session…</Loading>;
   if (profile) return <Navigate to="/portfolio" replace />;
@@ -62,6 +65,13 @@ export function LoginPage() {
             your email.
           </p>
         </div>
+        {demo && (
+          <section className="demo-login">
+            <span className="demo-badge">LOCALNET DEMO</span>
+            <p>Try the full flow with three disposable accounts.</p>
+            <DemoSwitcher />
+          </section>
+        )}
         <p className="fine-print">
           Learn about <Link to="/docs#account">your account</Link> and{" "}
           <Link to="/docs#privacy">privacy on Void Market</Link>.

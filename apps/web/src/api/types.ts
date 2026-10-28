@@ -9,6 +9,13 @@ export interface Profile extends Account {
 }
 
 export interface Asset {
+  nft?: {
+    chain_id: number;
+    collection: string;
+    token_id: string;
+    genesis: string;
+  } | null;
+  pending_transaction_id?: string | null;
   id: string;
   name: string;
   description: string;

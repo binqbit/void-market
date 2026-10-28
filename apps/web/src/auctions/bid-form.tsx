@@ -8,11 +8,13 @@ import type { Auction } from "./types";
 export function BidForm({
   auction,
   onComplete,
+  initialAmount,
 }: {
   auction: Auction;
   onComplete: () => void;
+  initialAmount?: string;
 }) {
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount ?? "");
   const [review, setReview] = useState(false);
   const [intent, setIntent] = useState<{
     request_id: string;

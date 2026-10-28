@@ -1,5 +1,5 @@
 import { ArrowRight, Clock3, Layers3, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { message, request } from "../api/client";
 import type { Asset, Transfer } from "../api/types";
@@ -15,6 +15,10 @@ import type { PendingTransfer } from "../portfolio/pending-transfer";
 import { TransferDialog } from "../portfolio/transfer-dialog";
 import { CreateAuctionDialog } from "../auctions/create-dialog";
 import { MyAuctions } from "../auctions/my-auctions";
+import { useMessages } from "../messages/provider";
+import { useDemoMode } from "../demo/config";
+import { TransactionCard } from "../demo/transaction-card";
+import { NativeTransferDialog } from "../portfolio/native-transfer-dialog";
 
 export function PortfolioPage() {
   const { profile, loading, error, refresh } = useSession();
@@ -52,6 +56,12 @@ export function PortfolioPage() {
 }
 
 function Portfolio({ accountId, name }: { accountId: string; name: string }) {
+  const demo = useDemoMode();
+  const { snapshot } = useMessages();
+  const completed = (snapshot?.transactions ?? [])
+    .filter((item) => item.status === "confirmed")
+    .map((item) => item.id)
+    .join(":");
   const [tab, setTab] = useState<"assets" | "auctions" | "history">("assets");
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -72,6 +82,9 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
     revision,
   );
   const active = tab === "assets" ? assets : history;
+  useEffect(() => {
+    setRevision((value) => value + 1);
+  }, [completed]);
 
   async function resume() {
     if (!pending) return;
@@ -98,10 +111,17 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           <h1>My portfolio</h1>
           <p>Welcome, {name}. Everything you hold, in one place.</p>
         </div>
-        <button className="button primary" onClick={() => setAdding(true)}>
-          <Plus size={18} />
-          Add an asset
-        </button>
+        {demo ? (
+          <Link className="button primary" to="/demo">
+            <Plus size={18} />
+            Get a local NFT
+          </Link>
+        ) : (
+          <button className="button primary" onClick={() => setAdding(true)}>
+            <Plus size={18} />
+            Add an asset
+          </button>
+        )}
       </div>
       <details className="portfolio-address">
         <summary>Receive an asset</summary>
@@ -172,7 +192,9 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
         <span className="field-help">
           {tab === "assets"
             ? "Current ownership"
-            : "Internal ownership transfers"}
+            : demo
+              ? "Confirmed local transactions"
+              : "Internal ownership transfers"}
         </span>
       </div>
       <section
@@ -180,7 +202,16 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
         role="tabpanel"
         aria-labelledby={`${tab}-tab`}
       >
-        {tab === "auctions" ? (
+        {tab === "history" && demo ? (
+          <div className="demo-transactions">
+            {(snapshot?.transactions ?? []).map((item) => (
+              <TransactionCard key={item.id} item={item} />
+            ))}
+            {!snapshot?.transactions?.length && (
+              <p>No local transactions yet.</p>
+            )}
+          </div>
+        ) : tab === "auctions" ? (
           <MyAuctions />
         ) : active.loading ? (
           <Loading>
@@ -207,7 +238,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
                 ? "Assets you add or receive appear here."
                 : "Sent and received assets appear here once a transfer is recorded."}
             </p>
-            {tab === "assets" && page === 0 && (
+            {tab === "assets" && page === 0 && !demo && (
               <button className="button" onClick={() => setAdding(true)}>
                 <Plus size={17} />
                 Add your first asset
@@ -220,7 +251,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
               <AssetCard
                 key={asset.id}
                 asset={asset}
-                disabled={Boolean(pending)}
+                disabled={Boolean(pending || asset.pending_transaction_id)}
                 onTransfer={() => setSelected(asset)}
                 onSell={() => setSelling(asset)}
               />
@@ -262,15 +293,23 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           onComplete={updated}
         />
       )}
-      {selected && (
-        <TransferDialog
+      {selected?.nft ? (
+        <NativeTransferDialog
           asset={selected}
           accountId={accountId}
-          pending={pending?.assetId === selected.id ? pending : null}
           onClose={() => setSelected(null)}
-          onComplete={updated}
-          onPending={() => setPending(readPending(accountId))}
         />
+      ) : (
+        selected && (
+          <TransferDialog
+            asset={selected}
+            accountId={accountId}
+            pending={pending?.assetId === selected.id ? pending : null}
+            onClose={() => setSelected(null)}
+            onComplete={updated}
+            onPending={() => setPending(readPending(accountId))}
+          />
+        )
       )}
       {selling && (
         <CreateAuctionDialog asset={selling} onClose={() => setSelling(null)} />

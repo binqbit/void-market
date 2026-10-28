@@ -32,8 +32,10 @@ export function SaleCard({ item }: { item: SaleRequest }) {
       </div>
       <p>
         The selected buyer is <strong>{accountName(item.buyer)}</strong> at{" "}
-        <strong>{item.price} ZEC</strong>. Approve to transfer ownership inside
-        Void Market. Payment remains unverified.
+        <strong>{item.price} ZEC</strong>.{" "}
+        {item.payment_status === "confirmed"
+          ? "Local payment is confirmed. Approve NFT delivery, or delivery proceeds automatically when your remaining time expires."
+          : "Approve to transfer ownership inside Void Market. Payment remains unverified."}
       </p>
       <div className="message-time">
         <Clock3 size={17} />
@@ -61,6 +63,7 @@ export function SaleCard({ item }: { item: SaleRequest }) {
           title={item.title}
           price={item.price}
           buyer={item.buyer}
+          paymentStatus={item.payment_status}
           onComplete={() => void refresh()}
         />
         <Link className="text-link" to={`/market/${item.auction_id}`}>

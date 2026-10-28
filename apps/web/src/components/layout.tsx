@@ -5,11 +5,13 @@ import { useSession } from "../auth/session";
 import { Brand } from "./brand";
 import { useMessages } from "../messages/provider";
 import { ThemeControl } from "./theme";
+import { useDemoMode } from "../demo/config";
 
 export function Layout() {
   const { profile, loading, error, refresh } = useSession();
   const location = useLocation();
   const { snapshot } = useMessages();
+  const demo = useDemoMode();
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [location.pathname]);
@@ -50,6 +52,11 @@ export function Layout() {
               </NavLink>
             )}
             <NavLink to="/docs">Docs</NavLink>
+            {demo && (
+              <NavLink to="/demo" className="demo-nav">
+                Demo
+              </NavLink>
+            )}
           </nav>
           <div className="header-actions">
             <ThemeControl />

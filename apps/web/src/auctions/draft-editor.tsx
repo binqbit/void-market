@@ -117,9 +117,9 @@ export function DraftEditor({
             onChange={(event) => setConsent(event.target.checked)}
           />
           <span>
-            I agree to lock this asset for the auction, keep its terms fixed,
-            and approve its eventual transfer separately. Payment is not
-            verified by Void Market.
+            {auction.execution === "localnet_custody"
+              ? "I accept the fixed auction terms and will approve transfer of this NFT to the registered arbiter. After the buyer fully pays the local ZEC invoice, I can approve delivery; my silence until the shared approval budget expires also authorizes delivery."
+              : "I agree to lock this asset for the auction, keep its terms fixed, and approve its eventual transfer separately. Payment is not verified by Void Market."}
           </span>
         </label>
         {!auction.wallet_ready && (
