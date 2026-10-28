@@ -259,6 +259,77 @@ test("catalog and public auction show rules without private prices", async ({
   });
 });
 
+test("closed bidding leaves the public market and stays in participant history", async ({
+  page,
+}) => {
+  const data = auction();
+  data.your_bid = "2.00000000";
+  data.participation = {
+    status: "active",
+    remaining_ms: 600000,
+    timer_running: false,
+    created_at_ms: Date.now(),
+  };
+  await fixture(page, "buyer", data);
+  await page.goto("/market");
+  await expect(
+    page.getByRole("heading", { name: data.asset.name }),
+  ).toBeVisible();
+
+  data.status = "matching";
+  data.actions.bid = false;
+  data.bidding_closes_at_ms = Date.now() - 1;
+  await page.route("**/api/v1/auctions?*", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await expect(
+    page.getByRole("heading", { name: "No open auctions." }),
+  ).toBeVisible({ timeout: 8000 });
+  await expect(
+    page.getByRole("heading", { name: data.asset.name }),
+  ).toHaveCount(0);
+
+  await page.goto("/portfolio");
+  await page.getByRole("tab", { name: "My auctions", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: data.asset.name }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "View auction", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: data.asset.name, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Back to my portfolio" }),
+  ).toHaveAttribute("href", "/portfolio");
+});
+
+test("an outsider loses cached auction details when bidding closes", async ({
+  page,
+}) => {
+  const data = auction();
+  await fixture(page, "public", data);
+  await page.goto(`/market/${id}`);
+  await expect(
+    page.getByRole("heading", { name: data.asset.name, level: 1 }),
+  ).toBeVisible();
+  await page.route(`**/api/v1/auctions/${id}`, (route) =>
+    route.fulfill({
+      status: 404,
+      json: { message: "Resource was not found" },
+    }),
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "Resource was not found",
+    { timeout: 8000 },
+  );
+  await expect(
+    page.getByRole("heading", { name: data.asset.name, level: 1 }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Sign in to bid" })).toHaveCount(
+    0,
+  );
+});
+
 test("bid review preserves the exact decimal string and retry identity", async ({
   page,
 }) => {

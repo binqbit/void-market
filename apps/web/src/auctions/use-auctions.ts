@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { message, request } from "../api/client";
+import { ApiError, message, request } from "../api/client";
 import { useSession } from "../auth/session";
 
 export function useAuctionQuery<T>(path: string | null) {
@@ -22,10 +22,12 @@ export function useAuctionQuery<T>(path: string | null) {
         const data = await request<T>(path, { signal: controller.signal });
         if (!controller.signal.aborted) setState({ key, data, error: null });
       } catch (error) {
+        const unavailable =
+          error instanceof ApiError && [403, 404].includes(error.status);
         if (!controller.signal.aborted)
           setState((previous) => ({
             key,
-            data: previous?.key === key ? previous.data : null,
+            data: !unavailable && previous?.key === key ? previous.data : null,
             error: message(error),
           }));
       } finally {

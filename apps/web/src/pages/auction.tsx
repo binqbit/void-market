@@ -49,6 +49,10 @@ export function AuctionPage() {
       </div>
     );
   const auction = query.data;
+  const acceptsNewBuyers =
+    auction.status === "open" &&
+    auction.bidding_closes_at_ms > Date.now() &&
+    auction.admitted_buyers < auction.buyer_limit;
   const own = auction.participation;
   const showMessagesLink =
     auction.status === "open" && own?.status === "active";
@@ -58,8 +62,12 @@ export function AuctionPage() {
   );
   return (
     <div className="page-width page-content auction-page">
-      <Link className="text-link" to="/market">
-        <ArrowLeft size={16} /> Back to market
+      <Link
+        className="text-link"
+        to={acceptsNewBuyers ? "/market" : "/portfolio"}
+      >
+        <ArrowLeft size={16} />
+        {acceptsNewBuyers ? "Back to market" : "Back to my portfolio"}
       </Link>
       {query.error && (
         <ErrorNotice retry={query.refresh}>{query.error}</ErrorNotice>

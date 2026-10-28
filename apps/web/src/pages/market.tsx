@@ -19,7 +19,7 @@ export function MarketPage() {
         <div>
           <span className="eyebrow">DISCOVER THE NEXT CHAPTER</span>
           <h1>The market</h1>
-          <p>Assets in view. Bids under wraps.</p>
+          <p>Browse assets with bidding still open.</p>
         </div>
         <Link className="button" to="/portfolio">
           Sell an asset
@@ -43,8 +43,11 @@ export function MarketPage() {
           <span className="empty-icon">
             <Store size={30} />
           </span>
-          <h2>No auctions yet.</h2>
-          <p>Choose an asset in your portfolio to publish the first auction.</p>
+          <h2>No open auctions.</h2>
+          <p>
+            Auctions leave the market when bidding closes. Find your existing
+            auctions and their history in My portfolio.
+          </p>
           <Link className="button primary" to="/portfolio">
             Open my portfolio
           </Link>
