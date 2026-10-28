@@ -173,3 +173,52 @@
   align-items: center;
   gap: 7px;
 }
+
+.navigation-toggle {
+  display: none;
+}
+[id] {
+  scroll-margin-top: 150px;
+}
+@media (max-width: 700px) {
+  .navigation-toggle {
+    display: inline-flex;
+  }
+  .main-nav {
+    display: none;
+  }
+  .main-nav.is-open {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 4px 12px;
+    padding: 10px 0;
+  }
+  .main-nav.is-open a {
+    justify-content: flex-start;
+  }
+  .header-account .header-account-label {
+    display: none;
+  }
+  .header-actions .header-account {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 10px;
+  }
+}
+.navigation-toggle {
+  position: relative;
+}
+.navigation-badge {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 16px;
+  border-radius: 8px;
+  padding: 1px 3px;
+  background: var(--panel);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  font-size: 10px;
+}

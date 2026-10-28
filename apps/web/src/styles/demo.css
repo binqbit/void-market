@@ -187,14 +187,6 @@
     grid-template-columns: minmax(0, 1fr);
     padding: 18px;
   }
-  .main-nav {
-    overflow-x: auto;
-    justify-content: flex-start;
-  }
-  .main-nav a {
-    flex: 0 0 auto;
-    white-space: nowrap;
-  }
 }
 .demo-transactions .native-transaction {
   grid-template-columns: minmax(0, 1fr);

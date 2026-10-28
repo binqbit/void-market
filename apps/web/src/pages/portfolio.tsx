@@ -19,6 +19,7 @@ import { useMessages } from "../messages/provider";
 import { useDemoMode } from "../demo/config";
 import { TransactionCard } from "../demo/transaction-card";
 import { NativeTransferDialog } from "../portfolio/native-transfer-dialog";
+import { loginHref } from "../auth/return-to";
 
 export function PortfolioPage() {
   const { profile, loading, error, refresh } = useSession();
@@ -41,7 +42,7 @@ export function PortfolioPage() {
           Sign in to manage assets, receive transfers and see your ownership
           history.
         </p>
-        <Link className="button primary" to="/login">
+        <Link className="button primary" to={loginHref("/portfolio")}>
           Sign in to continue <ArrowRight size={17} />
         </Link>
       </section>
@@ -149,10 +150,34 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
       )}
       {recoveryError && <ErrorNotice>{recoveryError}</ErrorNotice>}
       <div className="portfolio-toolbar">
-        <div className="tabs" role="tablist" aria-label="Portfolio view">
+        <div
+          className="tabs"
+          role="tablist"
+          aria-label="Portfolio view"
+          onKeyDown={(event) => {
+            const tabs = ["assets", "history", "auctions"] as const;
+            const index = tabs.indexOf(tab);
+            const next =
+              event.key === "ArrowRight"
+                ? (index + 1) % tabs.length
+                : event.key === "ArrowLeft"
+                  ? (index + tabs.length - 1) % tabs.length
+                  : event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : null;
+            if (next === null) return;
+            event.preventDefault();
+            setTab(tabs[next]);
+            setPage(0);
+            document.getElementById(`${tabs[next]}-tab`)?.focus();
+          }}
+        >
           <button
             role="tab"
             id="assets-tab"
+            tabIndex={tab === "assets" ? 0 : -1}
             aria-selected={tab === "assets"}
             aria-controls="portfolio-panel"
             onClick={() => {
@@ -166,6 +191,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           <button
             role="tab"
             id="history-tab"
+            tabIndex={tab === "history" ? 0 : -1}
             aria-selected={tab === "history"}
             aria-controls="portfolio-panel"
             onClick={() => {
@@ -179,6 +205,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           <button
             role="tab"
             id="auctions-tab"
+            tabIndex={tab === "auctions" ? 0 : -1}
             aria-selected={tab === "auctions"}
             aria-controls="portfolio-panel"
             onClick={() => {

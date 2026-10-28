@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/auth/config", (route) =>
+    route.fulfill({ json: { google: false, demo: false } }),
+  );
   await page.route("**/api/v1/messages", (route) =>
     route.fulfill({
       json: {
@@ -84,6 +87,8 @@ test("navigation, dark default and explicit theme survive reload without overflo
     ["My portfolio", "Your portfolio starts here."],
     ["Docs", "Understand Void Market"],
   ]) {
+    if (!(await page.locator("#main-navigation").isVisible()))
+      await page.getByRole("button", { name: /Open navigation/ }).click();
     await page
       .getByRole("navigation", { name: "Main navigation" })
       .getByRole("link", { name: link, exact: true })
