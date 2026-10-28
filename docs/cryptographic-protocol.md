@@ -168,7 +168,7 @@ The selected payment-dispute design is separate: it compares the buyer's own bid
 
 ## Candidate peer exchange through the arbiter
 
-This is a **retained multi-key candidate, not an adopted safe design or enabled capability**. It explains the requested user-to-user path through an arbiter. It does not resolve or replace the open matching construction described above. Transferring a secret into another key domain for protected computation is **not** permission to reveal its plaintext to that key owner.
+This is a **retained multi-key candidate, not an adopted safe design or enabled strong-verification capability**. The development-custody demo executes its arithmetic mechanics without claiming the proof guarantees in this section. It explains the requested user-to-user path through an arbiter but does not resolve or replace the open matching construction described above. Transferring a secret into another key domain for protected computation is **not** permission to reveal its plaintext to that key owner.
 
 User 1 owns input $x$ and secret key $sk_1$; User 2 owns input $v$ and secret key $sk_2$. The arbiter holds neither secret key. Here $C_1(t)$ means an encryption of $t$ under User 1's public key; $C_2(t)$ means an encryption under User 2's public key. Width $w$ and the permitted comparison are fixed by the auction profile before admission.
 
@@ -204,11 +204,11 @@ sequenceDiagram
     Note over U1,U2: Base Boolean audit later#59; numeric masks never open
 ```
 
-The numeric return must prove that **the exact value decrypted from the authorized request is the value re-encrypted under the peer's public key**. A signature, hash, or in-range number does not establish that relation. The arbiter removes numeric masks only inside encrypted computation. The access requirements prohibit clear $z$ at the arbiter and prohibit raw $C_2(x)$ or $C_2(z)$ at User 2. This retained candidate does not satisfy the no-foreign-key design requirement as an adopted solution and remains disabled.
+The numeric return must prove that **the exact value decrypted from the authorized request is the value re-encrypted under the peer's public key**. A signature, hash, or in-range number does not establish that relation. The arbiter removes numeric masks only inside encrypted computation. The access requirements prohibit clear $z$ at the arbiter and prohibit raw $C_2(x)$ or $C_2(z)$ at User 2. This retained candidate does not satisfy the no-foreign-key design requirement as an adopted solution and remains disabled for strong verification.
 
 The final output uses the selected Boolean encoding and separate owner-result masks. Each owner contributes a commitment and a matching encryption under the destination public key, with knowledge and binding evidence. User 1's raw mask ciphertext remains outside User 2's authorized access; the required evidence must prove the linkage without disclosing it. The arbiter commits its Boolean base masks before collecting those owner contributions, and the decryptor commits the protected answer before owner openings. Owner openings follow the post-freeze winner-selection gate; base Boolean audit openings follow accepted payment and completed operations. Numeric-transfer masks remain secret, including during audit. The evidence must link every conversion, mask layer, comparison, and returned answer without exposing those numeric witnesses; see [What must be proved](#what-must-be-proved) and [Owner masks and the two disclosure gates](#owner-masks-and-the-two-disclosure-gates).
 
-For this candidate, the first decryption/conversion request is also **post-freeze** under the current no-pre-close-plaintext policy. An earlier release would require a separately authorized changed profile, not an interpretation of this diagram. The necessary proof construction and backend support remain unresolved, so the conversion stays disabled.
+For this candidate, the first decryption/conversion request is also **post-freeze** under the current no-pre-close-plaintext policy. An earlier release would require a separately authorized changed profile, not an interpretation of this diagram. The necessary proof construction and verifier support remain unresolved, so strong verification stays disabled. The honest-role demo enforces the same timing gate but reports its proof status as unavailable.
 
 Read [How it works](how-it-works.md) for settlement timing and [Design decisions](design-decisions.md) for the rationale behind these boundaries.
 

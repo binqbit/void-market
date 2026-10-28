@@ -29,9 +29,9 @@ export function DocsPage() {
             <span className="eyebrow">01 / GETTING STARTED</span>
             <h2>Your next step</h2>
             <p>
-              Sign in, choose your public username and open My portfolio. Use
-              Market to find auctions, and Messages to review requests that need
-              your approval.
+              Browse open auctions in Market without signing in. Sign in to
+              manage your assets and auction activity in My portfolio, or review
+              approval requests in Messages.
             </p>
             <div className="notice">
               <Check size={19} />
@@ -57,18 +57,33 @@ export function DocsPage() {
             <h2>Know what you are moving</h2>
             <p>
               Your portfolio shows assets you currently own. An asset locked in
-              an auction opens that auction; an available asset can be sold or
-              transferred. Its image and description help identify it.
+              an auction opens that auction; an available asset can be sold or{" "}
+              {demo ? "withdrawn to an Ethereum address" : "transferred"}. Its
+              image and description help identify it.
             </p>
+            {demo && (
+              <p>
+                To deposit an NFT, open Deposit NFT to find your personal
+                Ethereum deposit address. Send the NFT there from your wallet,
+                then check the deposit using its transaction hash. Only a
+                confirmed transfer of an NFT still held at that address can be
+                added to your portfolio. Use the same local Ethereum network
+                shown in Demo.
+              </p>
+            )}
             <ol className="steps">
               <li>
                 <strong>Choose the asset.</strong>
-                <span>Select Transfer on its card.</span>
+                <span>
+                  Select {demo ? "Withdraw" : "Transfer"} on its card.
+                </span>
               </li>
               <li>
                 <strong>Check the recipient.</strong>
                 <span>
-                  Review the destination account and asset before approving.
+                  {demo
+                    ? "Enter the recipient's Ethereum address. Review and approve the exact NFT transaction in Messages."
+                    : "Review the destination account and asset before approving."}
                 </span>
               </li>
               <li>
@@ -109,12 +124,32 @@ export function DocsPage() {
               can join, and withdrawing does not free a place or allow reentry.
             </p>
             <p>
+              Once bidding closes, the auction leaves Market. Sellers and
+              admitted buyers can continue from My portfolio. Selection finishes
+              as soon as the required private checks complete; it does not wait
+              out the remaining hour.
+            </p>
+            <p>
               Approval requests can arrive while bidding is open. You can
               approve early without spending your time budget. After bidding
               closes, each participant has one shared 10-minute budget across
               their required responses. It runs only while that person needs to
               act; waiting for other people or the service pauses it. Missing a
               required approval deadline can disqualify you.
+            </p>
+            <h3>Why are there several approvals?</h3>
+            <p>
+              Each approval permits a specific private-check step, rather than
+              giving the arbiter permission to reveal anything it chooses. Some
+              requests need the result of an earlier step, so they cannot all be
+              approved in advance. Independent requests appear together; new
+              dependent requests appear as the checks progress. Return to
+              Messages for the next available actions.
+            </p>
+            <p>
+              Most of these are protocol messages, not blockchain transfers.
+              Approving a check does not authorize a payment. NFT transfers and
+              ZEC payment have separate requests showing what you are sending.
             </p>
             <p>
               {demo

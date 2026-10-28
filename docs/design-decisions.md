@@ -110,6 +110,20 @@ See [payment confirmation and disputes](how-it-works.md#8-confirm-payment-or-res
 
 See [asynchronous requests](how-it-works.md#4-handle-requests-asynchronously).
 
+## Why private checks require several approvals
+
+**Challenge.** Private matching needs controlled participation from the owners of encrypted inputs. Submitting a bid must not give the arbiter unrestricted permission to decrypt values, open masks or run arbitrary checks later. Each conversion and permitted disclosure has a specific purpose and recipient.
+
+**Chosen response.** Present concrete requests in Messages and bind each approval to its exact operation and context. A request may authorize a masked-value conversion, an encrypted mask contribution or the opening of an owner result mask at the permitted stage. Numeric transfer masks remain secret. These protocol messages are not all blockchain transactions: NFT custody, ZEC payment and NFT delivery are separate chain operations with their own consent.
+
+**Why several rounds are necessary.** Some requests depend on an earlier ciphertext, commitment or answer that does not exist yet. The owner cannot approve that exact future request in advance without granting broader authority. Independent requests are offered concurrently; dependent requests appear when their inputs are ready. Approval also does not bypass a disclosure gate: a result reserved for after bidding closes cannot be released early merely because its preparation is complete. The fixed buyer-to-buyer comparisons and reserve checks repeat these steps across multiple inputs, increasing the number of approvals.
+
+**Tradeoff.** Users have more interactions and must return for newly available requests. This is the usability cost of explicit, operation-specific control instead of blanket permission. It limits what an approval authorizes and makes that authorization inspectable; the number of clicks alone does not prove privacy or correct computation. The shared response budget charges only ready obligations and pauses for service or dependency waits.
+
+**Keys and implementation boundary.** An approval is an authorization signature; it is not a signature made with a homomorphic-encryption key. In the current demo, the market signs the bound approval with the account's Ed25519 signing key, then performs the authorized HE action with separate encryption keys. Because those keys are held by the platform, this is service-enforced consent, not cryptographic isolation from the custodian. A user-held-key implementation would need to enforce the same gates outside the platform and satisfy the unresolved proof requirements. Routine encrypted evaluation and bookkeeping can proceed under existing authorization; a new user click is needed for the explicit owner actions, not every machine instruction. Settlement also follows the already accepted publication terms, including delivery after confirmed full payment if the seller's remaining response budget expires.
+
+See [asynchronous requests](how-it-works.md#4-handle-requests-asynchronously) and [disclosure gates](cryptographic-protocol.md#owner-masks-and-the-two-disclosure-gates).
+
 ## Separate mathematical operations from market policy
 
 **Challenge.** A single component that mixes arithmetic, secret handling, message coordination, and sale rules becomes difficult to reason about.

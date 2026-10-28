@@ -58,7 +58,7 @@ The conceptual boundaries are equally important. A mathematics component handles
 
 ## Demonstration scope
 
-The initial experience is deliberately focused: one seller, one asset, a small set of buyers, and the assigned automated arbiter service with seller-approved custody terms. An external NFT on Ethereum Sepolia illustrates the asset side; Zcash testnet illustrates the private payment side. The asset is not a native Zcash NFT.
+The initial experience is deliberately focused: one seller, one asset, a small set of buyers, and the assigned automated arbiter service with seller-approved custody terms. Ethereum Sepolia and Zcash testnet describe the public-testnet direction. The runnable development-custody demo uses Anvil and Zcash regtest. The asset is not a native Zcash NFT.
 
 The arbiter receives confirmed control of the asset before the sale proceeds. After accepted payment, it transfers the asset to the winner; if the sale is safely canceled, it returns the asset to the seller. The platform coordinates these steps and their recovery conditions.
 

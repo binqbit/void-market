@@ -12,7 +12,7 @@ The seller explicitly approves or declines the custody and asset-transfer terms.
 
 ## 2. Establish confirmed asset custody
 
-The asset identity and destination for custody are fixed before the seller transfers it. In the demonstration direction, the asset is an NFT on Ethereum Sepolia and the custodian is the assigned platform arbiter service under the approved custody terms.
+The asset identity and destination for custody are fixed before the seller transfers it. The public-testnet direction targets an NFT on Ethereum Sepolia; the runnable local demo uses Anvil. In both cases the custodian is the assigned platform arbiter service under the approved custody terms.
 
 The sale proceeds only after the relevant transfer has been confirmed and control of the exact asset has been checked. A submitted transaction identifier or a promise to transfer is not enough. Merely giving an approval also must not be confused with a completed transfer of custody.
 
@@ -28,11 +28,13 @@ The comparison schedule follows the agreed policy. It does not allow an arbiter 
 
 ## 4. Handle requests asynchronously
 
-Participants receive scoped requests that explain what they are being asked to approve, sign, or reveal. They can confirm or reject each relevant action. Independent comparisons can progress concurrently; a participant is not required to remain on one continuously connected screen.
+Participants receive scoped requests that explain what they are being asked to approve, sign, or reveal. Required protocol requests have an Approve action, not an individual Reject action. A buyer who wants to leave uses withdrawal while the auction rules still permit it. Independent requests can progress concurrently; dependent requests appear only when their inputs are ready, so one blanket approval cannot replace the whole interaction. See [why private checks require several approvals](design-decisions.md#why-private-checks-require-several-approvals).
 
 The market records requests, responses, and state transitions. Re-delivery of a message must not create a second approval, payment credit, or asset transfer. The authoritative workflow distinguishes pending, accepted, invalid, expired, and unresolved states.
 
 Response budgets are attributable to the party whose action is actually required. Waiting for a valid action from the market or arbiter does not consume a buyer's personal response time. Retries do not create unlimited fresh budgets. An invalid request or unavailable proof checker is not treated as a buyer refusing a valid obligation.
+
+In the selected application policy, bidding closes one hour before the auction end time. Early approvals are optional and do not spend the response budget. Once bidding closes, each participant has one cumulative ten-minute budget, charged only while a valid action is ready for them. New requests do not reset it. The remaining hour is a deadline window, not a mandatory delay: selection advances as soon as the required checks are complete.
 
 ## 5. Prepare comparisons without revealing their answers
 
