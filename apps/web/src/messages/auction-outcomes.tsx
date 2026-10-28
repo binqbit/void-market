@@ -1,6 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { auctionReasons, statusLabels } from "../auctions/types";
+import { auctionReasons } from "../auctions/types";
+import { AuctionStatusBadge } from "../auctions/status-badge";
 import type { MessageSnapshot } from "./types";
 
 export function AuctionOutcomes({
@@ -20,9 +21,7 @@ export function AuctionOutcomes({
             key={outcome.auction_id}
           >
             <div>
-              <span className={`auction-status status-${outcome.status}`}>
-                {statusLabels[outcome.status]}
-              </span>
+              <AuctionStatusBadge auction={outcome} />
               <h3>{outcome.title}</h3>
               {outcome.reason && auctionReasons[outcome.reason] && (
                 <p>{auctionReasons[outcome.reason]}</p>

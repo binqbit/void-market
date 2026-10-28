@@ -130,12 +130,13 @@ test("messages show the auction outcome after the final approval", async ({
       auction_id: sessionId,
       title: "Dark Matter",
       status: "no_sale",
+      custody_status: "returned",
       reason: "reserve_not_met",
     },
   ];
   await page.goto("/messages");
   const results = page.getByRole("region", { name: "Auction results" });
-  await expect(results).toContainText("No sale");
+  await expect(results.locator(".auction-status")).toHaveText("Refunded");
   await expect(results).toContainText(
     "The auction ended without a sale because no eligible bid met the private reserve.",
   );

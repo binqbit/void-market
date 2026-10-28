@@ -1,25 +1,46 @@
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatZec } from "../amounts";
-import { statusLabels } from "../auctions/types";
+import { auctionStatus } from "../auctions/status";
 import type { AccountBid } from "./types";
 
-function status(bid: AccountBid, now: number): string {
-  if (bid.participation_status === "withdrawn") return "Withdrawn";
-  if (bid.participation_status === "disqualified") return "Disqualified";
-  if (bid.auction_status === "completed")
-    return bid.is_winner ? "Purchased" : "Not selected";
-  if (bid.auction_status === "awaiting_completion")
-    return bid.is_winner ? "Selected · completing sale" : "Not selected";
-  if (bid.auction_status === "open")
-    return now >= bid.bidding_closes_at_ms
-      ? "Approvals in progress"
-      : "Bid placed";
-  return statusLabels[bid.auction_status];
+function bidStatus(bid: AccountBid, now: number) {
+  if (bid.participation_status === "withdrawn") {
+    return { label: "Withdrawn", tone: "unsuccessful" };
+  }
+  if (bid.participation_status === "disqualified") {
+    return { label: "Disqualified", tone: "unsuccessful" };
+  }
+  if (bid.auction_status === "completed") {
+    return {
+      label: bid.is_winner ? "Purchased" : "Not selected",
+      tone: bid.is_winner ? "successful" : "unsuccessful",
+    };
+  }
+  if (bid.auction_status === "awaiting_completion") {
+    return {
+      label: bid.is_winner ? "Selected · completing sale" : "Not selected",
+      tone: bid.is_winner ? "active" : "unsuccessful",
+    };
+  }
+  if (bid.auction_status === "open") {
+    return {
+      label:
+        now >= bid.bidding_closes_at_ms
+          ? "Approvals in progress"
+          : "Bid placed",
+      tone: "active",
+    };
+  }
+  return auctionStatus({
+    status: bid.auction_status,
+    custody_status: bid.custody_status,
+  });
 }
 
 export function BidRow({ bid, now }: { bid: AccountBid; now: number }) {
   const { approved, requested, pending } = bid.approvals;
+  const status = bidStatus(bid, now);
   const active =
     bid.participation_status === "active" &&
     (["open", "matching"].includes(bid.auction_status) ||
@@ -31,7 +52,11 @@ export function BidRow({ bid, now }: { bid: AccountBid; now: number }) {
         <Link className="account-bid-title" to={`/market/${bid.auction_id}`}>
           {bid.asset_name} <ArrowUpRight size={15} aria-hidden="true" />
         </Link>
-        <span className="account-bid-status">{status(bid, now)}</span>
+        <span
+          className={`account-bid-status auction-status status-${status.tone}`}
+        >
+          {status.label}
+        </span>
         {active && (
           <time dateTime={new Date(bid.closes_at_ms).toISOString()}>
             Deadline {new Date(bid.closes_at_ms).toLocaleString()}

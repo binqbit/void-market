@@ -92,7 +92,9 @@
 .account-bid-title svg {
   flex-shrink: 0;
 }
-.account-bid-status,
+.account-bid-status {
+  align-self: flex-start;
+}
 .account-bid time,
 .account-bid-amount > span,
 .account-bid-progress > span {

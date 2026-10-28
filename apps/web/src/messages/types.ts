@@ -34,6 +34,7 @@ export interface MessageSnapshot {
     auction_id: string;
     title: string;
     status: "completed" | "no_sale" | "interrupted";
+    custody_status?: string;
     reason: string | null;
   }[];
   transactions?: import("../demo/types").NativeTransaction[];

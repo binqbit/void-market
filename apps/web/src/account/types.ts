@@ -17,6 +17,7 @@ export interface AccountBid {
   asset_name: string;
   amount: string;
   auction_status: AuctionStatus;
+  custody_status?: string;
   participation_status: "active" | "withdrawn" | "disqualified";
   is_winner: boolean;
   created_at_ms: number;

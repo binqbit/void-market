@@ -40,6 +40,7 @@ struct BidRow {
     auction_id: Uuid,
     asset_name: String,
     auction_status: String,
+    custody_status: String,
     is_winner: bool,
     closes_at_ms: i64,
     #[sqlx(flatten)]
@@ -52,6 +53,7 @@ struct BidView {
     asset_name: String,
     amount: String,
     auction_status: String,
+    custody_status: String,
     participation_status: String,
     is_winner: bool,
     created_at_ms: i64,
@@ -87,7 +89,7 @@ pub async fn list(
 
     let rows: Vec<BidRow> = sqlx::query_as(
         "SELECT p.*, a.asset_snapshot->>'name' AS asset_name,
-             a.status AS auction_status, COALESCE(a.winner_id=$1,FALSE) AS is_winner,
+             a.status AS auction_status, a.custody_status, COALESCE(a.winner_id=$1,FALSE) AS is_winner,
              a.closes_at_ms
          FROM auction_participants p JOIN auctions a ON a.id=p.auction_id
          WHERE p.account_id=$1 AND a.seller_id<>$1
@@ -109,6 +111,7 @@ pub async fn list(
             asset_name: row.asset_name,
             amount: amount::format(value),
             auction_status: row.auction_status,
+            custody_status: row.custody_status,
             participation_status: row.participant.status,
             is_winner: row.is_winner,
             created_at_ms: row.participant.created_at_ms,

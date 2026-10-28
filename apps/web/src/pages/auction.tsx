@@ -15,6 +15,8 @@ import { useMessages } from "../messages/provider";
 import { TransactionCard } from "../demo/transaction-card";
 import { loginHref } from "../auth/return-to";
 import { CloseBiddingButton } from "../auctions/close-bidding-button";
+import { isAuctionFinished, auctionStatus } from "../auctions/status";
+import { AuctionStatusBadge } from "../auctions/status-badge";
 
 export function AuctionPage() {
   const { id } = useParams();
@@ -34,6 +36,8 @@ export function AuctionPage() {
       </div>
     );
   const auction = query.data;
+  const finished = isAuctionFinished(auction.status);
+  const status = auctionStatus(auction);
   const acceptsNewBuyers =
     auction.status === "open" &&
     auction.bidding_closes_at_ms > Date.now() &&
@@ -68,21 +72,28 @@ export function AuctionPage() {
         </section>
         <div className="auction-sidebar">
           <section className="auction-summary panel">
-            <span className={`auction-status status-${auction.status}`}>
-              {statusLabels[auction.status]}
-            </span>
+            <AuctionStatusBadge auction={auction} />
             <h2>
               {auction.status === "open"
                 ? "A private bid. A clear decision."
-                : statusLabels[auction.status]}
+                : finished
+                  ? status.label
+                  : statusLabels[auction.status]}
             </h2>
+            {finished && auction.finished_at_ms !== null && (
+              <div className="auction-card-meta">
+                <Clock3 size={16} />
+                Finished {new Date(auction.finished_at_ms).toLocaleString()}
+              </div>
+            )}
             <div className="auction-card-meta">
               <Clock3 size={16} />
-              Auction ends {new Date(auction.closes_at_ms).toLocaleString()}
+              {finished ? "Auction deadline" : "Auction ends"}{" "}
+              {new Date(auction.closes_at_ms).toLocaleString()}
             </div>
             <div className="auction-card-meta">
               <Clock3 size={16} />
-              Bidding closes{" "}
+              {finished ? "Bidding closed" : "Bidding closes"}{" "}
               {new Date(
                 auction.bidding_closes_at_ms ?? auction.closes_at_ms - 3600000,
               ).toLocaleString()}

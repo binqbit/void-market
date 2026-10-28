@@ -358,6 +358,53 @@ test("an outsider loses cached auction details when bidding closes", async ({
   );
 });
 
+test("returned status requires confirmation and shows the actual finish time", async ({
+  page,
+}) => {
+  const data = auction();
+  data.status = "no_sale";
+  data.reason = "reserve_not_met";
+  data.custody_status = "return_pending";
+  data.finished_at_ms = Date.now() - 60_000;
+  data.actions.bid = false;
+  await fixture(page, "seller", data);
+  await page.goto(`/market/${id}`);
+  await expect(page.locator(".auction-status")).toHaveText("Return pending");
+  await expect(
+    page.getByText(
+      `Finished ${new Date(data.finished_at_ms).toLocaleString()}`,
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(/^Auction ends /)).toHaveCount(0);
+  await expect(page.getByText(/^Auction deadline /)).toBeVisible();
+
+  data.custody_status = "returned";
+  await page.reload();
+  await expect(page.locator(".auction-status")).toHaveText("Refunded");
+  await page.goto("/portfolio");
+  await page.getByRole("tab", { name: "My auctions" }).click();
+  await expect(page.locator(".auction-status")).toHaveText("Refunded");
+});
+
+test("auction badges distinguish active bidding from a completed sale", async ({
+  page,
+}) => {
+  const data = auction();
+  await fixture(page, "seller", data);
+  await page.goto(`/market/${id}`);
+  await expect(page.locator(".auction-status")).toHaveText("Active");
+  await expect(page.locator(".auction-stage")).toHaveText("Open for bids");
+
+  data.status = "completed";
+  data.finished_at_ms = Date.now();
+  data.custody_status = "delivered";
+  data.actions.bid = false;
+  await page.reload();
+  await expect(page.locator(".auction-status")).toHaveText("Sold");
+  await expect(page.locator(".auction-stage")).toHaveCount(0);
+});
+
 test("bid review preserves the exact decimal string and retry identity", async ({
   page,
 }) => {

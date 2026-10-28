@@ -84,7 +84,7 @@ export const statusLabels: Record<AuctionStatus, string> = {
   deposit_pending: "Awaiting NFT deposit",
   open: "Open for bids",
   matching: "Checking bids",
-  awaiting_completion: "Awaiting seller",
+  awaiting_completion: "Completing sale",
   completed: "Sale completed",
   no_sale: "No sale",
   interrupted: "Interrupted",

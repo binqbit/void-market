@@ -236,7 +236,7 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     .await?;
     let sales = crate::auctions::pending_sales(state, account).await?;
     let outcomes = sqlx::query_as::<_, AuctionOutcome>(
-        "SELECT a.id AS auction_id, a.asset_snapshot->>'name' AS title, a.status, a.reason
+        "SELECT a.id AS auction_id, a.asset_snapshot->>'name' AS title, a.status, a.custody_status, a.reason
          FROM auctions a JOIN auction_participants p ON p.auction_id=a.id
          WHERE p.account_id=$1 AND a.status IN ('completed','no_sale','interrupted')
          ORDER BY a.finished_at_ms DESC NULLS LAST, a.id DESC LIMIT 20",

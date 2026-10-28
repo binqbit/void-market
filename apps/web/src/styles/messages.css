@@ -270,7 +270,7 @@
   border-radius: 12px;
   background: var(--panel);
 }
-.auction-outcome .auction-status {
+.auction-outcome .auction-state {
   margin-bottom: 6px;
 }
 .auction-outcome .text-link {

@@ -1,3 +1,20 @@
+:root {
+  --status-active-text: #155e87;
+  --status-active-border: #8ebbd6;
+  --status-active-bg: #e5f2fb;
+  --status-unsuccessful-text: #815600;
+  --status-unsuccessful-border: #d7b86e;
+  --status-unsuccessful-bg: #fff3d6;
+}
+:root[data-theme="dark"] {
+  --status-active-text: #8dcdf4;
+  --status-active-border: #315b76;
+  --status-active-bg: #132432;
+  --status-unsuccessful-text: #efd17e;
+  --status-unsuccessful-border: #80652d;
+  --status-unsuccessful-bg: #302817;
+}
+
 .auction-image-link {
   display: block;
   color: inherit;
@@ -8,13 +25,34 @@
 }
 .auction-status {
   display: inline-flex;
-  color: var(--muted);
+  color: var(--status-active-text);
   font-size: 0.78rem;
   letter-spacing: 0.03em;
+  font-weight: 600;
+  padding: 3px 9px;
+  border: 1px solid var(--status-active-border);
+  border-radius: 6px;
+  background: var(--status-active-bg);
 }
-.status-open,
-.status-completed {
+.auction-state {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.auction-stage {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.status-successful {
   color: var(--accent);
+  border-color: var(--button-primary-border);
+  background: var(--button-primary-bg);
+}
+.status-unsuccessful {
+  color: var(--status-unsuccessful-text);
+  border-color: var(--status-unsuccessful-border);
+  background: var(--status-unsuccessful-bg);
 }
 .auction-card-meta {
   display: flex;

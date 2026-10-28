@@ -71,6 +71,7 @@ pub struct AuctionOutcome {
     pub auction_id: Uuid,
     pub title: String,
     pub status: String,
+    pub custody_status: String,
     pub reason: Option<String>,
 }
 
