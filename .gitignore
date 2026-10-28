@@ -14,7 +14,7 @@
 
 # Frontend dependencies and generated files.
 node_modules/
-node_modules/
+/apps/web/node_modules/
 /apps/web/dist/
 /apps/web/.vite/
 /apps/web/coverage/

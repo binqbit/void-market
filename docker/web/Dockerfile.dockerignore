@@ -1,0 +1,12 @@
+**
+!apps/
+!apps/web/
+!apps/web/**
+!docker/
+!docker/web/
+!docker/web/nginx.conf
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.env*
+apps/web/test-results/
+apps/web/playwright-report/
