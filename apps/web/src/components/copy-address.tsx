@@ -1,7 +1,13 @@
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
-export function CopyAddress({ address }: { address: string }) {
+export function CopyAddress({
+  address,
+  label = "Copy account address",
+}: {
+  address: string;
+  label?: string;
+}) {
   const [status, setStatus] = useState("");
   async function copy() {
     try {
@@ -17,7 +23,7 @@ export function CopyAddress({ address }: { address: string }) {
       <button
         className="icon-button"
         onClick={() => void copy()}
-        aria-label="Copy account address"
+        aria-label={label}
       >
         {status === "Copied" ? <Check size={16} /> : <Copy size={16} />}
       </button>

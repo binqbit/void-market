@@ -93,6 +93,7 @@ pub struct OperationView {
     pub revision: i64,
     pub can_approve: bool,
     pub can_retry: bool,
+    pub can_cancel: bool,
     pub remaining_ms: Option<i64>,
     pub timer_running: bool,
     pub created_at_ms: i64,

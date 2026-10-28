@@ -30,6 +30,7 @@ sha3 = "=0.10.9"
 uuid = { version = "=1.19.0", features = ["v4", "serde"] }
 sha2.workspace = true
 rand.workspace = true
+num-bigint = "=0.4.8"
 webauthn-rs = "=0.5.5"
 url = "=2.5.7"
 rdkafka = { version = "=0.39.0", default-features = false, features = ["tokio"] }

@@ -15,7 +15,31 @@ fn ethereum_decoding_rejects_malformed_and_non_ascii_rpc_data() {
     assert_eq!(abi::decoded_owner(&word).unwrap(), address);
     assert!(abi::owner_of("01").is_err());
     assert!(abi::owner_of("-1").is_err());
-    assert!(abi::owner_of("340282366920938463463374607431768211456").is_err());
+    assert!(
+        abi::owner_of(
+            "115792089237316195423570985008687907853269984665640564039457584007913129639936"
+        )
+        .is_err()
+    );
+    assert_eq!(
+        abi::token(
+            "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        )
+        .unwrap(),
+        "f".repeat(64)
+    );
+}
+
+#[test]
+fn withdrawal_addresses_reject_zero_and_mistyped_checksums() {
+    let valid = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+    assert_eq!(
+        abi::checked_address(valid).unwrap(),
+        valid.to_ascii_lowercase()
+    );
+    assert!(abi::checked_address("0x5aaeb6053F3E94C9b9A09f33669435E7Ef1BeAed").is_err());
+    assert!(abi::checked_address("0x0000000000000000000000000000000000000000").is_err());
+    assert!(abi::checked_address("not-an-address").is_err());
 }
 
 #[test]

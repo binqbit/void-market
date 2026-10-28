@@ -21,7 +21,7 @@ export interface Asset {
   name: string;
   description: string;
   image: string | null;
-  owner_id: string;
+  owner_id: string | null;
   active_auction_id?: string | null;
   created_at: string;
 }

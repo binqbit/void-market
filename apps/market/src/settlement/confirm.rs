@@ -81,6 +81,32 @@ pub(crate) async fn apply(
                 .bind(auction.id)
                 .execute(&mut *tx).await?;
         }
+        ("withdrawal", Payload::Ethereum(plan)) => {
+            let asset = operation.asset_id.ok_or(ApiError::Internal)?;
+            let updated = sqlx::query(
+                "UPDATE assets SET owner_id=NULL,pending_transaction_id=NULL
+                 WHERE id=$1 AND owner_id=$2 AND pending_transaction_id=$3",
+            )
+            .bind(asset)
+            .bind(operation.account_id)
+            .bind(operation.id)
+            .execute(&mut *tx)
+            .await?;
+            if updated.rows_affected() != 1 {
+                return Err(ApiError::Conflict(
+                    "NFT withdrawal no longer matches its owner",
+                ));
+            }
+            events::record(
+                &mut tx,
+                "AssetWithdrawn.v1",
+                json!({
+                    "asset_id":asset,"owner_id":operation.account_id,
+                    "destination":plan.movement.to,"transaction_id":txid,
+                }),
+            )
+            .await?;
+        }
         ("delivery" | "transfer", Payload::Ethereum(_)) => {
             let asset = operation.asset_id.ok_or(ApiError::Internal)?;
             let buyer = operation.recipient_id.ok_or(ApiError::Internal)?;

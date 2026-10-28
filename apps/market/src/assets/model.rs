@@ -7,7 +7,7 @@ pub struct Asset {
     pub name: String,
     pub description: String,
     pub image: Option<String>,
-    pub owner_id: Uuid,
+    pub owner_id: Option<Uuid>,
     pub active_auction_id: Option<Uuid>,
     pub nft: Option<serde_json::Value>,
     pub pending_transaction_id: Option<Uuid>,

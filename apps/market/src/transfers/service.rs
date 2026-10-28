@@ -34,7 +34,7 @@ pub async fn transfer(
         return Ok(existing);
     }
 
-    if asset.owner_id != actor {
+    if asset.owner_id != Some(actor) {
         return Err(ApiError::Forbidden);
     }
     if asset.active_auction_id.is_some() {

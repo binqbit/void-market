@@ -1,6 +1,6 @@
 use super::{
     auction,
-    model::{EvmPlan, Payload},
+    model::{EvmPlan, Operation, Payload},
     repository::{self, NewOperation},
 };
 use crate::{
@@ -11,46 +11,51 @@ use crate::{
     state::AppState,
 };
 use serde::Deserialize;
+use serde_json::json;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct NativeTransfer {
+pub struct WithdrawNft {
     pub request_id: Uuid,
-    pub recipient_address: Uuid,
+    pub recipient_address: String,
 }
 
 pub async fn prepare(
     state: &AppState,
     account: Uuid,
     asset: Uuid,
-    input: NativeTransfer,
+    input: WithdrawNft,
 ) -> Result<Uuid> {
     if state.chains.is_none() {
         return Err(ApiError::NotFound);
     }
     let sender = demo::repository::actor(&state.pool, account).await?;
-    let recipient = demo::repository::actor(&state.pool, input.recipient_address).await?;
-    if account == input.recipient_address {
-        return Err(ApiError::BadRequest("Recipient must differ from sender"));
+    let destination = abi::checked_address(input.recipient_address.trim())?;
+    if destination == sender.ethereum_address {
+        return Err(ApiError::BadRequest(
+            "Choose an address outside your platform wallet",
+        ));
     }
     let mut tx = state.pool.begin().await?;
     let item = assets::repository::lock(&mut tx, asset).await?;
-    let existing: Option<(Uuid, Option<Uuid>, Option<Uuid>)> =
-        sqlx::query_as("SELECT account_id,recipient_id,asset_id FROM chain_operations WHERE id=$1")
-            .bind(input.request_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-    if let Some((owner, receiver, existing_asset)) = existing {
-        if owner == account
-            && receiver == Some(input.recipient_address)
-            && existing_asset == Some(asset)
+    let existing: Option<Operation> = sqlx::query_as("SELECT * FROM chain_operations WHERE id=$1")
+        .bind(input.request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if let Some(existing) = existing {
+        if existing.account_id == account
+            && existing.asset_id == Some(asset)
+            && existing.kind == "withdrawal"
+            && matches!(repository::payload(state, &existing)?, Payload::Ethereum(plan) if plan.movement.to == destination)
         {
             return Ok(input.request_id);
         }
-        return Err(ApiError::Conflict("Transfer request has different details"));
+        return Err(ApiError::Conflict(
+            "Withdrawal request has different details",
+        ));
     }
-    if item.owner_id != account {
+    if item.owner_id != Some(account) {
         return Err(ApiError::Forbidden);
     }
     if item.active_auction_id.is_some() || item.pending_transaction_id.is_some() {
@@ -65,19 +70,28 @@ pub async fn prepare(
             .ok_or(ApiError::Conflict("This asset is not a native NFT"))?,
     )
     .await?;
+    if state
+        .chains
+        .as_ref()
+        .ok_or(ApiError::Unavailable)?
+        .ethereum
+        .owner(&collection, &token, json!("latest"))
+        .await?
+        != sender.ethereum_address
+    {
+        return Err(ApiError::Conflict(
+            "Your platform wallet no longer owns this NFT",
+        ));
+    }
     let payload = Payload::Ethereum(Box::new(EvmPlan {
         sender: sender.ethereum_address.clone(),
         contract: collection.clone(),
-        calldata: abi::transfer(
-            &sender.ethereum_address,
-            &recipient.ethereum_address,
-            &token,
-        )?,
+        calldata: abi::transfer(&sender.ethereum_address, &destination, &token)?,
         movement: NftMovement {
             collection,
             token_id: token,
             from: sender.ethereum_address,
-            to: recipient.ethereum_address,
+            to: destination,
         },
         transaction: None,
         metadata: None,
@@ -88,10 +102,10 @@ pub async fn prepare(
         NewOperation {
             id: input.request_id,
             account,
-            recipient: Some(input.recipient_address),
+            recipient: None,
             auction: None,
             asset: Some(asset),
-            kind: "transfer",
+            kind: "withdrawal",
             payload,
             approval: None,
         },
@@ -108,16 +122,18 @@ pub async fn prepare(
 
 pub async fn cancel(state: &AppState, account: Uuid, id: Uuid) -> Result<()> {
     let original = repository::get(&state.pool, id).await?;
-    if original.account_id != account || original.kind != "transfer" {
+    if original.account_id != account
+        || !matches!(original.kind.as_str(), "transfer" | "withdrawal")
+    {
         return Err(ApiError::Forbidden);
     }
     let mut tx = state.pool.begin().await?;
     let asset = original.asset_id.ok_or(ApiError::Internal)?;
     assets::repository::lock(&mut tx, asset).await?;
     let operation = repository::lock(&mut tx, id).await?;
-    if operation.status != "failed"
-        && (operation.approval.is_some() || operation.signed_transaction.is_some())
-    {
+    if operation.signed_transaction.is_some() || operation.transaction_id.is_some() {
+        verify_reverted(state, &operation).await?;
+    } else if operation.status != "failed" && operation.approval.is_some() {
         return Err(ApiError::Conflict(
             "An authorized transaction must be reconciled before cancellation",
         ));
@@ -132,4 +148,21 @@ pub async fn cancel(state: &AppState, account: Uuid, id: Uuid) -> Result<()> {
     .await?;
     tx.commit().await?;
     Ok(())
+}
+
+async fn verify_reverted(state: &AppState, operation: &Operation) -> Result<()> {
+    if operation.status == "failed"
+        && operation.error.as_deref() == Some("Ethereum transaction reverted")
+        && let Some(id) = operation.transaction_id.as_deref()
+    {
+        let ethereum = &state.chains.as_ref().ok_or(ApiError::Unavailable)?.ethereum;
+        match ethereum.receipt(id).await {
+            Err(ApiError::Conflict("Ethereum transaction reverted")) => return Ok(()),
+            Err(ApiError::Unavailable) => return Err(ApiError::Unavailable),
+            _ => {}
+        }
+    }
+    Err(ApiError::Conflict(
+        "An authorized transaction must be reconciled before cancellation",
+    ))
 }

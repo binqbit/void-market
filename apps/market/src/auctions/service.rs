@@ -239,7 +239,7 @@ pub async fn complete(
             "The sale request changed; review the current result",
         ));
     }
-    if asset.owner_id != seller || asset.active_auction_id != Some(id) {
+    if asset.owner_id != Some(seller) || asset.active_auction_id != Some(id) {
         return Err(ApiError::Conflict(
             "The auction no longer controls this asset",
         ));

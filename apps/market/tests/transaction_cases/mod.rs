@@ -1,3 +1,5 @@
+mod nft_custody;
+
 use crate::support::Fixture;
 use actix_web::http::StatusCode;
 use market::chains::{Localnet, config::LocalnetConfig};

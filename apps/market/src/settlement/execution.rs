@@ -194,10 +194,17 @@ async fn reconcile(state: &AppState, operation: Operation, instance: Uuid) -> Re
     let evidence = match &payload {
         Payload::Ethereum(plan) => {
             if let Some(receipt) = chains.ethereum.receipt(id).await? {
-                chains
-                    .ethereum
-                    .verify_movement(&receipt, &plan.movement)
-                    .await?;
+                if operation.kind == "withdrawal" {
+                    chains
+                        .ethereum
+                        .verify_departure(&receipt, &plan.movement)
+                        .await?;
+                } else {
+                    chains
+                        .ethereum
+                        .verify_movement(&receipt, &plan.movement)
+                        .await?;
+                }
                 Some(receipt)
             } else {
                 None

@@ -46,7 +46,7 @@ pub async fn create(state: &AppState, seller: Uuid, input: CreateAuction) -> Res
         }
         return Ok(existing.id);
     }
-    if asset.owner_id != seller {
+    if asset.owner_id != Some(seller) {
         return Err(ApiError::Forbidden);
     }
     if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {
@@ -195,7 +195,7 @@ pub async fn publish(
         return Err(ApiError::Conflict("The draft changed; review it again"));
     }
     let asset = assets::repository::get(&state.pool, original.asset_id).await?;
-    if asset.owner_id != seller {
+    if asset.owner_id != Some(seller) {
         return Err(ApiError::Forbidden);
     }
     if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {
@@ -220,7 +220,7 @@ pub async fn publish(
     if auction.revision != input.revision {
         return Err(ApiError::Conflict("The draft changed; review it again"));
     }
-    if asset.owner_id != seller {
+    if asset.owner_id != Some(seller) {
         return Err(ApiError::Forbidden);
     }
     if asset.active_auction_id.is_some() || asset.pending_transaction_id.is_some() {

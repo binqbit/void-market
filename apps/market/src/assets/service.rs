@@ -24,7 +24,7 @@ pub async fn register(state: &AppState, actor: Uuid, input: RegisterAsset) -> Re
     let inserted = repository::insert_if_absent(&mut transaction, actor, &input).await?;
     let asset = repository::lock(&mut transaction, input.request_id).await?;
 
-    if asset.owner_id != actor
+    if asset.owner_id != Some(actor)
         || asset.name != name
         || asset.description != input.description
         || asset.image != input.image

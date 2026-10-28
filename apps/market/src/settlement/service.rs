@@ -53,7 +53,7 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
     let incoming = operation.account_id != account
         || matches!(
             operation.kind.as_str(),
-            "mint" | "airdrop" | "return" | "delivery"
+            "mint" | "airdrop" | "return" | "delivery" | "nft_deposit"
         );
     let title = match operation.kind.as_str() {
         "mint" => "Receive a demo NFT",
@@ -66,6 +66,9 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         "transfer" if incoming && operation.status == "confirmed" => "NFT received",
         "transfer" if incoming => "Incoming NFT transfer",
         "transfer" => "Send NFT",
+        "withdrawal" if operation.status == "confirmed" => "NFT withdrawn",
+        "withdrawal" => "Withdraw NFT",
+        "nft_deposit" => "NFT deposited",
         "payment" if incoming && operation.status == "confirmed" => "Payment received",
         "payment" if incoming => "Incoming payment",
         "payment" => "Pay the auction invoice",
@@ -127,6 +130,13 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
     } else {
         false
     };
+    let can_cancel = operation.account_id == account
+        && matches!(operation.kind.as_str(), "transfer" | "withdrawal")
+        && matches!(operation.status.as_str(), "preparing" | "ready" | "failed")
+        && ((operation.signed_transaction.is_none() && operation.transaction_id.is_none())
+            || (operation.status == "failed"
+                && operation.error.as_deref() == Some("Ethereum transaction reverted")))
+        && (operation.approval.is_none() || operation.status == "failed");
     Ok(OperationView {
         id: operation.id,
         account_id: operation.account_id,
@@ -151,6 +161,7 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
             && operation.account_id == account
             && remaining_ms.is_none_or(|remaining| remaining > 0),
         can_retry,
+        can_cancel,
         remaining_ms,
         timer_running,
         created_at_ms: operation.created_at_ms,

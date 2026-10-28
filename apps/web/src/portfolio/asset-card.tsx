@@ -7,11 +7,13 @@ export function AssetCard({
   asset,
   disabled,
   onTransfer,
+  onWithdraw,
   onSell,
 }: {
   asset: Asset;
   disabled: boolean;
   onTransfer: () => void;
+  onWithdraw: () => void;
   onSell: () => void;
 }) {
   return (
@@ -43,9 +45,9 @@ export function AssetCard({
         <button
           className="button full-width"
           disabled={disabled || Boolean(asset.active_auction_id)}
-          onClick={onTransfer}
+          onClick={asset.nft ? onWithdraw : onTransfer}
         >
-          Transfer <ArrowUpRight size={17} />
+          {asset.nft ? "Withdraw" : "Transfer"} <ArrowUpRight size={17} />
         </button>
       </div>
     </article>

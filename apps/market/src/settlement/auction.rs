@@ -90,13 +90,10 @@ pub(crate) async fn custodian(
 
 pub(crate) async fn descriptor(state: &AppState, nft: &Value) -> Result<(String, String)> {
     let deployment = demo::repository::deployment(&state.pool).await?;
-    let collection = deployment.collection_address.ok_or(ApiError::Unavailable)?;
-    if nft["chain_id"] != 31337
-        || nft["genesis"] != deployment.ethereum_genesis
-        || nft["collection"] != collection
-    {
+    let collection = abi::address(nft["collection"].as_str().ok_or(ApiError::Internal)?)?;
+    if nft["chain_id"] != 31337 || nft["genesis"] != deployment.ethereum_genesis {
         return Err(ApiError::Conflict(
-            "NFT belongs to a different local-chain deployment",
+            "NFT belongs to a different Ethereum network",
         ));
     }
     let token = nft["token_id"]

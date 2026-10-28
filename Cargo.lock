@@ -1800,6 +1800,7 @@ dependencies = [
  "image",
  "jsonwebtoken",
  "minicbor",
+ "num-bigint",
  "private-check",
  "rand 0.9.2",
  "rdkafka",

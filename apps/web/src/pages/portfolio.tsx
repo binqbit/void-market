@@ -18,7 +18,8 @@ import { MyAuctions } from "../auctions/my-auctions";
 import { useMessages } from "../messages/provider";
 import { useDemoMode } from "../demo/config";
 import { TransactionHistory } from "../portfolio/transaction-history";
-import { NativeTransferDialog } from "../portfolio/native-transfer-dialog";
+import { WithdrawDialog } from "../portfolio/withdraw-dialog";
+import { DepositDialog } from "../portfolio/deposit-dialog";
 import { loginHref } from "../auth/return-to";
 
 export function PortfolioPage() {
@@ -67,6 +68,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [depositing, setDepositing] = useState(false);
   const [selected, setSelected] = useState<Asset | null>(null);
   const [selling, setSelling] = useState<Asset | null>(null);
   const [pending, setPending] = useState<PendingTransfer | null>(() =>
@@ -115,10 +117,17 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           <p>Welcome, {name}. Everything you hold, in one place.</p>
         </div>
         {demo ? (
-          <Link className="button primary" to="/demo">
-            <Plus size={18} />
-            Get a local NFT
-          </Link>
+          <div className="button-row">
+            <button
+              className="button primary"
+              onClick={() => setDepositing(true)}
+            >
+              <Plus size={18} /> Deposit NFT
+            </button>
+            <Link className="button" to="/demo">
+              Get a local NFT
+            </Link>
+          </div>
         ) : (
           <button className="button primary" onClick={() => setAdding(true)}>
             <Plus size={18} />
@@ -126,14 +135,16 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
           </button>
         )}
       </div>
-      <details className="portfolio-address">
-        <summary>Receive an asset</summary>
-        <p className="field-help">
-          Share this address with another Void Market user so they can send you
-          an asset.
-        </p>
-        <CopyAddress address={accountId} />
-      </details>
+      {!demo && (
+        <details className="portfolio-address">
+          <summary>Receive an asset</summary>
+          <p className="field-help">
+            Share this address with another Void Market user so they can send
+            you an asset.
+          </p>
+          <CopyAddress address={accountId} />
+        </details>
+      )}
       {pending && (
         <div className="notice pending-notice">
           <Clock3 size={20} />
@@ -275,6 +286,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
                 asset={asset}
                 disabled={Boolean(pending || asset.pending_transaction_id)}
                 onTransfer={() => setSelected(asset)}
+                onWithdraw={() => setSelected(asset)}
                 onSell={() => setSelling(asset)}
               />
             ))}
@@ -317,11 +329,7 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
         />
       )}
       {selected?.nft ? (
-        <NativeTransferDialog
-          asset={selected}
-          accountId={accountId}
-          onClose={() => setSelected(null)}
-        />
+        <WithdrawDialog asset={selected} onClose={() => setSelected(null)} />
       ) : (
         selected && (
           <TransferDialog
@@ -333,6 +341,12 @@ function Portfolio({ accountId, name }: { accountId: string; name: string }) {
             onPending={() => setPending(readPending(accountId))}
           />
         )
+      )}
+      {depositing && (
+        <DepositDialog
+          onClose={() => setDepositing(false)}
+          onComplete={updated}
+        />
       )}
       {selling && (
         <CreateAuctionDialog asset={selling} onClose={() => setSelling(null)} />

@@ -203,15 +203,18 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
               Prepare payment again
             </button>
           )}
-        {item.kind === "transfer" &&
+        {(item.kind === "transfer" || item.kind === "withdrawal") &&
           item.direction === "outgoing" &&
+          item.can_cancel !== false &&
           ["preparing", "ready", "failed"].includes(item.status) && (
             <button
               className="quiet-button"
               disabled={busy}
               onClick={() => void cancelTransfer()}
             >
-              Cancel transfer
+              {item.kind === "withdrawal"
+                ? "Cancel withdrawal"
+                : "Cancel transfer"}
             </button>
           )}
       </div>
@@ -342,6 +345,13 @@ export function TransactionCard({ item }: { item: NativeTransaction }) {
               The NFT stays with the assigned arbiter until delivery or return.
               After full verified payment, the seller's missed approval deadline
               counts as consent to deliver.
+            </p>
+          )}
+          {review.kind === "withdrawal" && (
+            <p>
+              This sends the NFT out of Void Market to the address above. After
+              confirmation, it leaves your portfolio. Check the address before
+              approving.
             </p>
           )}
           {review.kind === "payment" && (

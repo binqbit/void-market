@@ -2,22 +2,18 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { message, post } from "../api/client";
 import type { Asset } from "../api/types";
-import { useAuctionQuery } from "../auctions/use-auctions";
 import { Dialog } from "../components/dialog";
 import { ErrorNotice } from "../components/feedback";
-import type { DemoStatus, NativeTransaction } from "../demo/types";
+import type { NativeTransaction } from "../demo/types";
 import { useMessages } from "../messages/provider";
 
-export function NativeTransferDialog({
+export function WithdrawDialog({
   asset,
-  accountId,
   onClose,
 }: {
   asset: Asset;
-  accountId: string;
   onClose: () => void;
 }) {
-  const demo = useAuctionQuery<DemoStatus>("/v1/demo");
   const { refresh } = useMessages();
   const navigate = useNavigate();
   const [recipient, setRecipient] = useState("");
@@ -29,9 +25,9 @@ export function NativeTransferDialog({
     setBusy(true);
     setError(null);
     try {
-      await post<NativeTransaction>(`/v1/assets/${asset.id}/native-transfer`, {
+      await post<NativeTransaction>(`/v1/assets/${asset.id}/withdraw`, {
         request_id: requestId,
-        recipient_address: recipient,
+        recipient_address: recipient.trim(),
       });
       await refresh();
       onClose();
@@ -44,41 +40,41 @@ export function NativeTransferDialog({
   }
 
   return (
-    <Dialog title="Transfer NFT" onClose={onClose} busy={busy}>
-      <div className="form-stack">
+    <Dialog title="Withdraw NFT" onClose={onClose} busy={busy}>
+      <div className="nft-dialog">
         <strong>{asset.name}</strong>
         <p>
-          The recipient's local Ethereum address is filled in automatically.
-          Review and approve the exact transaction in Messages. Ownership
-          changes only after confirmation.
+          Send this NFT to an Ethereum wallet. Review the destination and
+          approve the transaction in Messages. The NFT leaves your portfolio
+          after confirmation.
         </p>
 
         <label>
-          Recipient
-          <select
+          Destination Ethereum address
+          <input
+            type="text"
             value={recipient}
             onChange={(event) => setRecipient(event.target.value)}
+            placeholder="0x…"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={42}
             disabled={busy}
-          >
-            <option value="">Choose an account</option>
-            {demo.data?.actors
-              .filter((actor) => actor.account_id !== accountId)
-              .map((actor) => (
-                <option key={actor.account_id} value={actor.account_id}>
-                  {actor.name}
-                </option>
-              ))}
-          </select>
+          />
         </label>
-        {demo.error && (
-          <ErrorNotice retry={demo.refresh}>{demo.error}</ErrorNotice>
-        )}
+        <p className="field-help">
+          Use an address on Ethereum localnet (chain 31337).
+        </p>
         <button
           className="button primary"
-          disabled={busy || !recipient}
+          disabled={
+            busy ||
+            !/^0x[0-9a-fA-F]{40}$/.test(recipient.trim()) ||
+            /^0x0{40}$/.test(recipient.trim())
+          }
           onClick={() => void prepare()}
         >
-          {busy ? "Preparing…" : "Prepare transfer"}
+          {busy ? "Preparing…" : "Review withdrawal"}
         </button>
         {error && <ErrorNotice>{error}</ErrorNotice>}
       </div>

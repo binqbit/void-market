@@ -44,15 +44,12 @@ impl Ethereum {
             abi::address(&movement.from)?
         };
         let expected_to = abi::address(&movement.to)?;
-        let token = movement
-            .token_id
-            .parse::<u128>()
-            .map_err(|_| ApiError::Internal)?;
+        let token = abi::token(&movement.token_id)?;
         let collection = abi::address(&movement.collection)?;
         let event = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
         let from_topic = format!("0x{:0>64}", &expected_from[2..]);
         let to_topic = format!("0x{:0>64}", &expected_to[2..]);
-        let token_topic = format!("0x{token:064x}");
+        let token_topic = format!("0x{token}");
         let matched = receipt["logs"]
             .as_array()
             .ok_or(ApiError::Unavailable)?
@@ -82,5 +79,84 @@ impl Ethereum {
             ));
         }
         Ok(())
+    }
+
+    pub async fn verify_departure(&self, receipt: &Value, movement: &NftMovement) -> Result<()> {
+        let from = abi::address(&movement.from)?;
+        let to = abi::address(&movement.to)?;
+        let matched = transfer_from(receipt, &movement.collection, &movement.token_id, &to)?;
+        if matched != from
+            || self
+                .owner(
+                    &movement.collection,
+                    &movement.token_id,
+                    receipt["blockNumber"].clone(),
+                )
+                .await?
+                == from
+        {
+            return Err(ApiError::Conflict(
+                "NFT withdrawal evidence does not match this operation",
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn supports_erc721(&self, collection: &str) -> Result<()> {
+        for (interface, expected) in [("01ffc9a7", true), ("ffffffff", false), ("80ac58cd", true)] {
+            let data = format!("0x01ffc9a7{interface}{}", "0".repeat(56));
+            let result = self
+                .rpc
+                .call("eth_call", json!([{"to":collection,"data":data},"latest"]))
+                .await?;
+            let valid = if expected {
+                format!("0x{:064x}", 1)
+            } else {
+                format!("0x{:064x}", 0)
+            };
+            if result != valid {
+                return Err(ApiError::BadRequest(
+                    "The NFT contract must support ERC-721",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn transfer_from(receipt: &Value, collection: &str, token: &str, to: &str) -> Result<String> {
+    let collection = abi::address(collection)?;
+    let to = format!("0x{:0>64}", &abi::address(to)?[2..]);
+    let token = format!("0x{}", abi::token(token)?);
+    let logs = receipt["logs"].as_array().ok_or(ApiError::Unavailable)?;
+    let mut matches = logs.iter().filter(|log| {
+        log["address"]
+            .as_str()
+            .is_some_and(|value| value.eq_ignore_ascii_case(&collection))
+            && log["topics"]
+                .as_array()
+                .is_some_and(|topics| topics.len() == 4)
+            && log["topics"][0]
+                == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+            && log["topics"][2]
+                .as_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case(&to))
+            && log["topics"][3]
+                .as_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case(&token))
+    });
+    let entry = matches.next().ok_or(ApiError::Conflict(
+        "No matching NFT deposit was found in this transaction",
+    ))?;
+    if matches.next().is_some() {
+        return Err(ApiError::Conflict(
+            "The transaction contains ambiguous NFT transfers",
+        ));
+    }
+    let from = entry["topics"][1].as_str().ok_or(ApiError::Unavailable)?;
+    if from == format!("0x{}", "0".repeat(64)) {
+        Ok("0x0000000000000000000000000000000000000000".into())
+    } else {
+        abi::decoded_owner(from)
     }
 }

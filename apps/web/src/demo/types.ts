@@ -12,6 +12,8 @@ export interface NativeTransaction {
     | "return"
     | "delivery"
     | "transfer"
+    | "withdrawal"
+    | "nft_deposit"
     | "payment";
   status: string;
   network: "ethereum" | "zcash";
@@ -45,6 +47,7 @@ export interface NativeTransaction {
   revision: number;
   can_approve: boolean;
   can_retry: boolean;
+  can_cancel?: boolean;
   remaining_ms: number | null;
   timer_running: boolean;
   confirmation: {

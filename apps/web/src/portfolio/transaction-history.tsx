@@ -6,6 +6,7 @@ import { useAuctionQuery } from "../auctions/use-auctions";
 import { ErrorNotice, Loading } from "../components/feedback";
 import { TransactionCard } from "../demo/transaction-card";
 import type { NativeTransaction } from "../demo/types";
+import { shortAddress } from "../demo/types";
 
 const labels: Record<string, string> = {
   preparing: "Preparing",
@@ -60,6 +61,11 @@ export function TransactionHistory() {
                     {item.counterparty.username
                       ? `@${item.counterparty.username}`
                       : item.counterparty.name}
+                  </span>
+                )}
+                {item.kind === "withdrawal" && item.nft && (
+                  <span title={item.nft.to}>
+                    To {shortAddress(item.nft.to)}
                   </span>
                 )}
               </span>

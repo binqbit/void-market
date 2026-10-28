@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use url::Url;
 
 pub use observation::NftMovement;
+pub use observation::transfer_from;
 pub use transactions::EvmTransaction;
 
 pub const CHAIN_ID: u64 = 31337;
