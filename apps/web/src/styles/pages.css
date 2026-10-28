@@ -209,6 +209,10 @@
   margin-bottom: 20px;
   font-size: 10px;
 }
+.asset-actions {
+  display: grid;
+  gap: 12px;
+}
 .history-list {
   border: 1px solid var(--line);
   border-radius: 12px;

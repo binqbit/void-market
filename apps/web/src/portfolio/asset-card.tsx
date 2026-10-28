@@ -26,29 +26,31 @@ export function AssetCard({
         <code className="asset-id" title={asset.id}>
           {asset.id}
         </code>
-        {asset.active_auction_id ? (
-          <Link
-            className="button full-width"
-            to={`/market/${asset.active_auction_id}`}
-          >
-            View auction <ArrowUpRight size={17} />
-          </Link>
-        ) : (
+        <div className="asset-actions">
+          {asset.active_auction_id ? (
+            <Link
+              className="button full-width"
+              to={`/market/${asset.active_auction_id}`}
+            >
+              View auction <ArrowUpRight size={17} />
+            </Link>
+          ) : (
+            <button
+              className="button primary full-width"
+              disabled={disabled}
+              onClick={onSell}
+            >
+              Sell asset
+            </button>
+          )}
           <button
-            className="button primary full-width"
-            disabled={disabled}
-            onClick={onSell}
+            className="button full-width"
+            disabled={disabled || Boolean(asset.active_auction_id)}
+            onClick={asset.nft ? onWithdraw : onTransfer}
           >
-            Sell asset
+            {asset.nft ? "Withdraw" : "Transfer"} <ArrowUpRight size={17} />
           </button>
-        )}
-        <button
-          className="button full-width"
-          disabled={disabled || Boolean(asset.active_auction_id)}
-          onClick={asset.nft ? onWithdraw : onTransfer}
-        >
-          {asset.nft ? "Withdraw" : "Transfer"} <ArrowUpRight size={17} />
-        </button>
+        </div>
       </div>
     </article>
   );
