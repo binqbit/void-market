@@ -25,5 +25,6 @@ node_modules/
 # Local NFT contract build artifacts.
 /contracts/demo-nft/out/
 /contracts/demo-nft/cache/
+/contracts/demo-nft/artifacts/
 /.localnet/
 **/__pycache__/
