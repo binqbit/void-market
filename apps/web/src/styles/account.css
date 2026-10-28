@@ -1,0 +1,156 @@
+.bidding-overview {
+  margin-bottom: 28px;
+}
+.bidding-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.bidding-heading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.bidding-heading p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.bidding-heading .button {
+  flex-shrink: 0;
+}
+.bidding-heading [aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.bidding-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 24px 0 0;
+  gap: 20px;
+}
+.bidding-stats dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.bidding-stats dd {
+  margin: 8px 0 0;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.bidding-stats dd a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+}
+.approvals-due dd {
+  color: var(--accent);
+}
+.account-bids {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.account-bids > .field-help {
+  margin: 0 0 8px;
+}
+.account-bid-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.account-bid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(120px, 0.7fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.account-bid:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.account-bid-description,
+.account-bid-amount,
+.account-bid-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.account-bid-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.account-bid-title svg {
+  flex-shrink: 0;
+}
+.account-bid-status,
+.account-bid time,
+.account-bid-amount > span,
+.account-bid-progress > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.account-bid-amount strong {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.account-bid-progress progress {
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--line);
+  accent-color: var(--accent);
+}
+.account-bid-progress progress::-webkit-progress-bar {
+  background: var(--line);
+}
+.account-bid-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.account-bid-progress progress::-moz-progress-bar {
+  background: var(--accent);
+}
+.account-bid-progress .text-link {
+  font-size: 13px;
+}
+.bidding-empty {
+  padding: 8px 0;
+}
+.bidding-empty p {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .bidding-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .account-bid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .account-bid-description {
+    grid-column: 1 / -1;
+  }
+  .account-bid-amount strong {
+    font-size: 14px;
+  }
+}
+@media (max-width: 420px) {
+  .bidding-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+}

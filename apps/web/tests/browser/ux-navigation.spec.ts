@@ -45,6 +45,21 @@ async function setup(page: Page, signedIn = false) {
   await page.route("**/api/v1/me/transactions?*", (route) =>
     route.fulfill({ json: [] }),
   );
+  await page.route("**/api/v1/me/bids?*", (route) =>
+    route.fulfill({
+      json: {
+        stats: {
+          bids_placed: 0,
+          active_bids: 0,
+          completed_purchases: 0,
+          pending_approvals: 0,
+        },
+        bids: [],
+        has_more: false,
+        server_time_ms: Date.now(),
+      },
+    }),
+  );
   await page.route("**/api/v1/auctions/auction-123", (route) =>
     route.fulfill({ status: 404, json: { message: "Fixture auction" } }),
   );

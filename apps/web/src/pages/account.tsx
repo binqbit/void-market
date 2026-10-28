@@ -6,6 +6,7 @@ import { message, post } from "../api/client";
 import { useSession } from "../auth/session";
 import { ErrorNotice, Loading } from "../components/feedback";
 import { loginHref, safeReturnTo } from "../auth/return-to";
+import { BiddingOverview } from "../account/bidding-overview";
 
 export function AccountPage() {
   const { profile, loading, refresh, signOut } = useSession();
@@ -76,6 +77,7 @@ export function AccountPage() {
           {notice}
         </div>
       )}
+      {profile.username && <BiddingOverview key={profile.address} />}
       <div className="account-grid">
         <section className="panel">
           <h2>Public profile</h2>
