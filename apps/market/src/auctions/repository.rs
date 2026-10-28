@@ -285,15 +285,15 @@ pub async fn revision(pool: &PgPool, account: Uuid) -> Result<i64> {
 }
 
 pub async fn pending_sales(state: &AppState, account: Uuid) -> Result<Vec<SaleRequest>> {
-    let ids: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM auctions WHERE seller_id=$1 AND status='awaiting_completion'
+    let ids: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT id,COALESCE(completion_requested_at_ms,created_at_ms) FROM auctions WHERE seller_id=$1 AND status='awaiting_completion'
          ORDER BY created_at_ms LIMIT 100",
     )
     .bind(account)
     .fetch_all(&state.pool)
     .await?;
     let mut requests = Vec::new();
-    for id in ids {
+    for (id, created_at_ms) in ids {
         let auction = view(state, id, Some(account)).await?;
         if !auction.actions.complete {
             continue;
@@ -301,6 +301,7 @@ pub async fn pending_sales(state: &AppState, account: Uuid) -> Result<Vec<SaleRe
         let participant = auction.participation.ok_or(ApiError::Internal)?;
         requests.push(SaleRequest {
             revision: auction.revision,
+            created_at_ms,
             payment_status: auction.payment_status,
             auction_id: id,
             request_id: auction.completion_request_id.ok_or(ApiError::Internal)?,

@@ -50,17 +50,50 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
     } else {
         (None, false)
     };
+    let incoming = operation.account_id != account
+        || matches!(
+            operation.kind.as_str(),
+            "mint" | "airdrop" | "return" | "delivery"
+        );
     let title = match operation.kind.as_str() {
         "mint" => "Receive a demo NFT",
         "airdrop" => "Claim local ZEC",
         "deposit" => "Approve NFT custody",
+        "return" if operation.status == "confirmed" => "NFT returned",
         "return" => "Return NFT to seller",
+        "delivery" if operation.status == "confirmed" => "NFT delivered",
         "delivery" => "Deliver NFT to buyer",
-        "transfer" => "Transfer NFT",
+        "transfer" if incoming && operation.status == "confirmed" => "NFT received",
+        "transfer" if incoming => "Incoming NFT transfer",
+        "transfer" => "Send NFT",
+        "payment" if incoming && operation.status == "confirmed" => "Payment received",
+        "payment" if incoming => "Incoming payment",
         "payment" => "Pay the auction invoice",
         _ => return Err(ApiError::Internal),
     }
     .to_owned();
+    let counterparty_id = if operation.account_id != account {
+        Some(operation.account_id)
+    } else {
+        operation.recipient_id.filter(|id| *id != account)
+    };
+    let counterparty = if let Some(id) = counterparty_id {
+        sqlx::query_as("SELECT id AS address,name,username FROM accounts WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await?
+    } else {
+        None
+    };
+    let auction_title = if let Some(id) = operation.auction_id {
+        sqlx::query_scalar("SELECT asset_snapshot->>'name' FROM auctions WHERE id=$1")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await?
+            .flatten()
+    } else {
+        None
+    };
     let confirmation = if let Some(bytes) = &operation.receipt_sealed {
         let bytes = state
             .custody
@@ -82,6 +115,18 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
     } else {
         None
     };
+    let can_retry = if operation.status == "failed" && operation.account_id == account {
+        match operation.kind.as_str() {
+            "airdrop" | "mint" => state.chains.is_some(),
+            "payment" if remaining_ms.is_some_and(|left| left > 0) => {
+                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM auctions WHERE id=$1 AND status='awaiting_completion' AND winner_id=$2 AND payment_status<>'confirmed')")
+                    .bind(operation.auction_id).bind(account).fetch_one(&state.pool).await?
+            }
+            _ => false,
+        }
+    } else {
+        false
+    };
     Ok(OperationView {
         id: operation.id,
         account_id: operation.account_id,
@@ -91,6 +136,9 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         status: operation.status.clone(),
         network,
         title,
+        direction: if incoming { "incoming" } else { "outgoing" },
+        counterparty,
+        auction_title,
         transaction_id: operation.transaction_id,
         ethereum_transaction: transaction,
         nft,
@@ -102,6 +150,7 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
         can_approve: operation.status == "ready"
             && operation.account_id == account
             && remaining_ms.is_none_or(|remaining| remaining > 0),
+        can_retry,
         remaining_ms,
         timer_running,
         created_at_ms: operation.created_at_ms,
@@ -111,14 +160,25 @@ pub async fn view(state: &AppState, account: Uuid, id: Uuid) -> Result<Operation
 }
 
 pub async fn list(state: &AppState, account: Uuid) -> Result<Vec<OperationView>> {
+    list_page(state, account, 100, 0).await
+}
+
+pub async fn list_page(
+    state: &AppState,
+    account: Uuid,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<OperationView>> {
     if state.chains.is_none() {
         return Ok(Vec::new());
     }
     let ids:Vec<Uuid>=sqlx::query_scalar(
         "SELECT id FROM chain_operations WHERE account_id=$1 OR recipient_id=$1 ORDER BY created_at_ms
-         DESC,id LIMIT 100",
+         DESC,id LIMIT $2 OFFSET $3",
     )
     .bind(account)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.pool).await?;
     let mut result = Vec::with_capacity(ids.len());
     for id in ids {

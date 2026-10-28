@@ -105,6 +105,7 @@ pub(crate) struct Participant {
 #[derive(Serialize)]
 pub struct SaleRequest {
     pub revision: i64,
+    pub created_at_ms: i64,
     pub payment_status: String,
     pub auction_id: Uuid,
     pub request_id: Uuid,

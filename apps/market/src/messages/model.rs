@@ -35,6 +35,8 @@ pub struct Message {
     pub id: Uuid,
     pub session_id: Uuid,
     pub session_title: String,
+    pub auction_title: Option<String>,
+    pub created_at_ms: i64,
     pub auction_id: Option<Uuid>,
     pub can_withdraw: bool,
     pub request_id: Uuid,
@@ -85,6 +87,7 @@ pub struct ParticipantInput {
 pub struct SessionSummary {
     pub id: Uuid,
     pub title: String,
+    pub auction_title: Option<String>,
     pub auction_id: Option<Uuid>,
     pub can_withdraw: bool,
     pub status: String,

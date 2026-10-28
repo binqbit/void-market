@@ -230,7 +230,11 @@ async fn reconcile(state: &AppState, operation: Operation, instance: Uuid) -> Re
         current(&mut tx, &operation, instance).await?;
         repository::status(
             &mut tx, operation.id, "failed",
-            Some("The signed payment expired without confirmation. Prepare and review a fresh payment."),
+            Some(if operation.kind == "airdrop" {
+                "The ZEC claim expired without confirmation. Request local ZEC again from Demo."
+            } else {
+                "The signed payment expired without confirmation. Prepare and review a fresh payment."
+            }),
         ).await?;
         tx.commit().await?;
         return Ok(());

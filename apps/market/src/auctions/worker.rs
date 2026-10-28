@@ -337,12 +337,13 @@ async fn award(
         )?;
         sqlx::query(
             "UPDATE auctions SET status='awaiting_completion',winner_id=$2,award_hash=$3,
-            completion_request_id=$4,revision=nextval('message_revision') WHERE id=$1",
+            completion_request_id=$4,completion_requested_at_ms=$5,revision=nextval('message_revision') WHERE id=$1",
         )
         .bind(auction.id)
         .bind(winner)
         .bind(award)
         .bind(Uuid::new_v4())
+        .bind(messages::now_ms()?)
         .execute(&mut *connection)
         .await?;
         events::record_node(

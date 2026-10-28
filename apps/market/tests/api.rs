@@ -2,6 +2,7 @@ mod auction_cases;
 mod message_cases;
 mod node_cases;
 mod support;
+mod transaction_cases;
 
 use actix_web::{
     App,

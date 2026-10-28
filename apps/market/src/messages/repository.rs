@@ -109,6 +109,8 @@ struct MessageRow {
     id: Uuid,
     session_id: Uuid,
     session_title: String,
+    auction_title: Option<String>,
+    created_at_ms: i64,
     auction_id: Option<Uuid>,
     can_withdraw: bool,
     request_id: Uuid,
@@ -130,6 +132,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     let now = clock::now_ms()?;
     let rows: Vec<MessageRow> = sqlx::query_as(
         "SELECT a.id, a.session_id, s.title AS session_title, s.auction_id,
+         x.asset_snapshot->>'name' AS auction_title,
+         (extract(epoch from a.created_at)*1000)::bigint AS created_at_ms,
          (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw, a.request_id, a.revision,
          a.kind, a.status, COALESCE(p.status,m.status) AS participant_status, s.status AS session_status,
          COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
@@ -181,6 +185,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
             id: row.id,
             session_id: row.session_id,
             session_title: row.session_title,
+            auction_title: row.auction_title,
+            created_at_ms: row.created_at_ms,
             auction_id: row.auction_id,
             can_withdraw: row.can_withdraw,
             request_id: row.request_id,
@@ -208,7 +214,8 @@ pub async fn snapshot(state: &AppState, account: Uuid) -> Result<Snapshot> {
     .fetch_one(&state.pool)
     .await?;
     let sessions: Vec<SessionSummary> = sqlx::query_as(
-        "SELECT s.id, s.title, s.auction_id, (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
+        "SELECT s.id, s.title, s.auction_id, x.asset_snapshot->>'name' AS auction_title,
+         (x.id IS NULL OR x.seller_id<>$1) AS can_withdraw,
          s.status, COALESCE(p.status,m.status) AS participation_status,
          COALESCE(p.remaining_ms,m.remaining_ms) AS remaining_ms,
          (COALESCE(p.chargeable,m.chargeable) AND (x.id IS NULL OR x.closes_at_ms<=$2) AND COALESCE(r.healthy AND

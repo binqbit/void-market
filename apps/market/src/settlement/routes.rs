@@ -41,8 +41,13 @@ async fn payment(
     Ok(HttpResponse::Accepted().json(service::view(&state, account.0, operation).await?))
 }
 
-async fn list(state: web::Data<AppState>, account: Principal) -> Result<HttpResponse> {
-    Ok(HttpResponse::Ok().json(service::list(&state, account.0).await?))
+async fn list(
+    state: web::Data<AppState>,
+    account: Principal,
+    query: web::Query<crate::http::pagination::Page>,
+) -> Result<HttpResponse> {
+    let (limit, offset) = query.bounds()?;
+    Ok(HttpResponse::Ok().json(service::list_page(&state, account.0, limit, offset).await?))
 }
 async fn get(
     state: web::Data<AppState>,
