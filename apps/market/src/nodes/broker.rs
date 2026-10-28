@@ -108,6 +108,7 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
         | "auction.published"
         | "auction.bid_admitted"
         | "auction.frozen"
+        | "auction.bidding_closed_early"
         | "auction.awarded"
         | "auction.participant_excluded"
         | "auction.ended"
@@ -151,19 +152,24 @@ pub async fn consume(
                         Some(bytes) => apply(&state, bytes).await,
                         None => Err(ApiError::BadRequest("Empty node event")),
                     };
-                    if result.is_ok() {
-                        consumer.commit_message(&message, CommitMode::Sync)?;
-                        state.node_ready.store(true, Ordering::Relaxed);
-                        break;
-                    }
-                    state.node_ready.store(false, Ordering::Relaxed);
-                    if !reported {
-                        tracing::warn!(
-                            partition = message.partition(),
-                            offset = message.offset(),
-                            "node event remains pending; intake will retry"
-                        );
-                        reported = true;
+                    match result {
+                        Ok(()) => {
+                            consumer.commit_message(&message, CommitMode::Sync)?;
+                            state.node_ready.store(true, Ordering::Relaxed);
+                            break;
+                        }
+                        Err(error) => {
+                            state.node_ready.store(false, Ordering::Relaxed);
+                            if !reported {
+                                tracing::warn!(
+                                    error = %error,
+                                    partition = message.partition(),
+                                    offset = message.offset(),
+                                    "node event remains pending; intake will retry"
+                                );
+                                reported = true;
+                            }
+                        }
                     }
                     tokio::select! {
                         _ = stop.changed() => return Ok(()),

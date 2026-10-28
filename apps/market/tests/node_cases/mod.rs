@@ -1,3 +1,5 @@
+mod broker;
+
 use crate::support::Fixture;
 use actix_web::{
     App,
