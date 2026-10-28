@@ -1,6 +1,27 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/v1/messages", (route) =>
+    route.fulfill({
+      json: {
+        custody_mode: "disabled",
+        revision: 0,
+        server_time_ms: Date.now(),
+        pending: 0,
+        messages: [],
+        sessions: [],
+      },
+    }),
+  );
+  await page.route("**/api/v1/messages/events", (route) =>
+    route.fulfill({
+      contentType: "text/event-stream",
+      body: 'event: messages\ndata: {"revision":0}\n\n',
+    }),
+  );
+});
+
 const address = "00000000-0000-4000-8000-000000000001";
 const recipient = "00000000-0000-4000-8000-000000000002";
 const assetId = "00000000-0000-4000-8000-000000000003";

@@ -3,11 +3,13 @@ import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
 import { useLayoutEffect } from "react";
 import { useSession } from "../auth/session";
 import { Brand } from "./brand";
+import { useMessages } from "../messages/provider";
 import { ThemeControl } from "./theme";
 
 export function Layout() {
   const { profile, loading, error, refresh } = useSession();
   const location = useLocation();
+  const { snapshot } = useMessages();
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [location.pathname]);
@@ -26,6 +28,27 @@ export function Layout() {
             </NavLink>
             <NavLink to="/market">Market</NavLink>
             <NavLink to="/portfolio">My portfolio</NavLink>
+            {profile && (
+              <NavLink to="/messages">
+                Messages
+                <span
+                  className="nav-message-count"
+                  aria-label={
+                    snapshot?.pending
+                      ? `${snapshot.pending} awaiting approval`
+                      : undefined
+                  }
+                  aria-hidden={!snapshot?.pending}
+                  style={{
+                    visibility: snapshot?.pending ? "visible" : "hidden",
+                  }}
+                >
+                  {(snapshot?.pending ?? 0) > 99
+                    ? "99+"
+                    : (snapshot?.pending ?? 0)}
+                </span>
+              </NavLink>
+            )}
             <NavLink to="/docs">Docs</NavLink>
           </nav>
           <div className="header-actions">

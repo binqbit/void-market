@@ -1,0 +1,232 @@
+import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+const account = "00000000-0000-4000-8000-000000000001";
+const sessionId = "00000000-0000-4000-8000-000000000010";
+const messageId = "00000000-0000-4000-8000-000000000020";
+const requestId = "00000000-0000-4000-8000-000000000030";
+
+async function fixture(page: Page) {
+  const snapshot = {
+    custody_mode: "development",
+    revision: 1,
+    server_time_ms: Date.now(),
+    pending: 1,
+    sessions: [
+      {
+        id: sessionId,
+        title: "Private approval session",
+        status: "active",
+        participation_status: "active",
+        remaining_ms: 600000,
+        timer_running: true,
+      },
+    ],
+    messages: [
+      {
+        id: messageId,
+        session_id: sessionId,
+        session_title: "Private approval session",
+        request_id: requestId,
+        revision: 1,
+        stage: "mask_contribution",
+        status: "ready",
+        participant_status: "active",
+        session_status: "active",
+        remaining_ms: 600000,
+        timer_running: true,
+        approval: null,
+      },
+    ],
+  };
+  await page.addInitScript(() => {
+    class Events extends EventTarget {
+      onopen: (() => void) | null = null;
+      private hint = () => this.dispatchEvent(new Event("messages"));
+      constructor() {
+        super();
+        window.addEventListener("test-messages-hint", this.hint);
+      }
+      close() {
+        window.removeEventListener("test-messages-hint", this.hint);
+      }
+    }
+    Object.defineProperty(window, "EventSource", { value: Events });
+  });
+  await page.route("**/api/v1/me", (route) =>
+    route.fulfill({
+      json: {
+        address: account,
+        name: "Test owner",
+        username: "test_owner",
+        email: "owner@example.test",
+      },
+    }),
+  );
+  await page.route("**/api/v1/messages", (route) =>
+    route.fulfill({ json: snapshot }),
+  );
+  return snapshot;
+}
+
+test("messages show one clear approval and preserve the layout", async ({
+  page,
+}, testInfo) => {
+  const snapshot = await fixture(page);
+  const requests: unknown[] = [];
+  await page.route(`**/api/v1/messages/${messageId}/approve`, async (route) => {
+    requests.push(route.request().postDataJSON());
+    snapshot.messages[0].status = "approved";
+    snapshot.messages[0].timer_running = false;
+    snapshot.pending = 0;
+    await route.fulfill({
+      status: 202,
+      json: { mode: "dev_custodial", signature: "fixture" },
+    });
+  });
+  await page.goto("/messages");
+  await expect(
+    page.getByRole("heading", { name: "Messages", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Step 2 of 5")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Your sessions" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reject", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("messages.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByText("Approved — processing")).toBeVisible();
+  expect(requests).toEqual([{ request_id: requestId, revision: 1 }]);
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("an update arriving during snapshot loading is not lost", async ({
+  page,
+}) => {
+  const snapshot = await fixture(page);
+  const stale = structuredClone(snapshot);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requests = 0;
+  await page.route("**/api/v1/messages", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await held;
+      await route.fulfill({ json: stale });
+    } else {
+      await route.fulfill({ json: snapshot });
+    }
+  });
+
+  await page.goto("/messages");
+  await expect.poll(() => requests).toBe(1);
+  snapshot.messages[0].status = "approved";
+  snapshot.messages[0].timer_running = false;
+  snapshot.pending = 0;
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("test-messages-hint")),
+  );
+  release();
+
+  await expect(page.getByText("Approved — processing")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(0);
+  expect(requests).toBe(2);
+});
+
+test("withdrawal needs explicit confirmation and closes the session", async ({
+  page,
+}) => {
+  const snapshot = await fixture(page);
+  let withdrawals = 0;
+  await page.route(
+    `**/api/v1/approval-sessions/${sessionId}/withdraw`,
+    async (route) => {
+      withdrawals += 1;
+      snapshot.messages[0].participant_status = "withdrawn";
+      snapshot.messages[0].status = "cancelled";
+      snapshot.messages[0].session_status = "interrupted";
+      snapshot.sessions[0].participation_status = "withdrawn";
+      snapshot.sessions[0].status = "interrupted";
+      snapshot.pending = 0;
+      await route.fulfill({ json: { mode: "dev_custodial" } });
+    },
+  );
+  await page.goto("/messages");
+  await page.getByRole("button", { name: "Withdraw bid", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep participating" }).click();
+  expect(withdrawals).toBe(0);
+  await page.getByRole("button", { name: "Withdraw bid", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Withdraw bid", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByText("Bid withdrawn", { exact: true }).first(),
+  ).toBeVisible();
+  expect(withdrawals).toBe(1);
+});
+
+test("server-confirmed expiry removes approval", async ({ page }) => {
+  const snapshot = await fixture(page);
+  snapshot.messages[0].participant_status = "disqualified";
+  snapshot.messages[0].status = "cancelled";
+  snapshot.messages[0].session_status = "interrupted";
+  snapshot.messages[0].remaining_ms = 0;
+  snapshot.messages[0].timer_running = false;
+  snapshot.sessions[0].participation_status = "disqualified";
+  snapshot.sessions[0].status = "interrupted";
+  snapshot.pending = 0;
+  await page.goto("/messages");
+  await expect(
+    page.getByText("Disqualified — time budget expired"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("a failed refresh marks the timer as unconfirmed", async ({ page }) => {
+  await fixture(page);
+  await page.goto("/messages");
+  await expect(page.getByText("10:00")).toBeVisible();
+
+  await page.route("**/api/v1/messages", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: "unavailable", message: "Temporarily unavailable" },
+    }),
+  );
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("test-messages-hint")),
+  );
+  await expect(page.getByText("Reconnecting…")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Connection lost. Remaining time will be confirmed when you reconnect.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toBeEnabled();
+});
