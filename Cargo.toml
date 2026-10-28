@@ -5,6 +5,7 @@ members = [
     "crates/private-check",
     "crates/arbiter-protocol",
     "apps/market",
+    "apps/arbiter",
 ]
 
 [workspace.package]

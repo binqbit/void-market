@@ -10,6 +10,7 @@ WORKDIR /source
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY apps/market ./apps/market
+COPY apps/arbiter ./apps/arbiter
 
 RUN cargo build --locked --release --package market
 

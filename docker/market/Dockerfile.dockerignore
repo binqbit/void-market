@@ -6,6 +6,8 @@
 !apps/
 !apps/market/
 !apps/market/**
+!apps/arbiter/
+!apps/arbiter/**
 !docker/
 !docker/market/
 !docker/market/Dockerfile
