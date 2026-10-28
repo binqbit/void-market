@@ -7,6 +7,7 @@ import os
 import sqlite3
 import subprocess
 import time
+from contextlib import closing
 from pathlib import Path
 
 import faucet
@@ -48,6 +49,11 @@ def main():
     )
     parser.add_argument("--bin-dir", type=Path, default=Path("/usr/local/bin"))
     parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument(
+        "--allow-insecure-rpc",
+        action="store_true",
+        help="Allow wallet HTTP RPC on a trusted private network; never publish its port",
+    )
     parser.add_argument(
         "--port", type=int, help="Override the selected node listening port"
     )
@@ -160,6 +166,7 @@ validator_address = {json.dumps(validator)}
 encryption_identity = {json.dumps(str(wallet / "identity.txt"))}
 [rpc]
 bind = ["{args.host}:{args.port or 28232}"]
+allow_insecure_remote_bind = {str(args.allow_insecure_rpc).lower()}
 timeout = 180
 ''')
         base = [
@@ -179,7 +186,7 @@ timeout = 180
             subprocess.run(base + ["init-wallet-encryption"], check=True)
         # Pinned Zallet beta.3 keeps encrypted mnemonics in SQLite, not separate files.
         # Inspect only the count so a restart cannot generate another wallet seed.
-        with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
             seeds = connection.execute(
                 "SELECT count(*) FROM ext_zallet_keystore_mnemonics"
             ).fetchone()[0]

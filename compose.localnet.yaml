@@ -36,7 +36,8 @@ services:
       - 127.0.0.1:${ZCASH_RPC_PORT:-18232}:18232
   zallet:
     <<: *localnet
-    command: ["wallet", "--host", "0.0.0.0"]
+    # Cookie-authenticated RPC stays inside the trusted Docker network, without a host port.
+    command: ["wallet", "--host", "0.0.0.0", "--allow-insecure-rpc"]
     depends_on:
       zebra:
         condition: service_started
