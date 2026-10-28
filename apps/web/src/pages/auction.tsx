@@ -212,6 +212,16 @@ export function AuctionPage() {
                   : "Ownership was transferred inside Void Market. Payment remains unverified."}
               </p>
             )}
+            {native && auction.payment && auction.status !== "completed" && (
+              <p>
+                Paid {formatZec(auction.payment.paid)} /{" "}
+                {formatZec(auction.payment.expected)} ZEC. Remaining:{" "}
+                {formatZec(auction.payment.remaining)} ZEC.
+              </p>
+            )}
+            {native && auction.settlement_note && (
+              <p className="notice">{auction.settlement_note}</p>
+            )}
             {auction.actions.complete &&
               auction.winner &&
               auction.agreed_price &&
@@ -235,26 +245,6 @@ export function AuctionPage() {
               />
             )}
           </section>
-          {native && (
-            <section className="panel auction-summary">
-              <h3>Local settlement</h3>
-              <p>
-                NFT:{" "}
-                {(auction.custody_status ?? "pending").replaceAll("_", " ")}
-              </p>
-              <p>Payment: {auction.payment_status}</p>
-              {auction.payment && (
-                <p>
-                  Paid {formatZec(auction.payment.paid)} /{" "}
-                  {formatZec(auction.payment.expected)} ZEC. Remaining:{" "}
-                  {formatZec(auction.payment.remaining)} ZEC.
-                </p>
-              )}
-              {auction.settlement_note && (
-                <p className="notice">{auction.settlement_note}</p>
-              )}
-            </section>
-          )}
           {transactions.map((item) => (
             <TransactionCard key={item.id} item={item} />
           ))}

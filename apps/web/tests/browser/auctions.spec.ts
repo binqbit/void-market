@@ -126,6 +126,48 @@ test("ordinary auctions do not expose demo acceleration", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("native auctions keep payment progress without a technical status panel", async ({
+  page,
+}) => {
+  const data = auction();
+  data.execution = "localnet_custody";
+  data.actions.bid = false;
+  data.custody_status = "held";
+  await fixture(page, "seller", data);
+  await page.goto(`/market/${id}`);
+  await expect(
+    page.getByRole("heading", { name: data.asset.name, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Local settlement" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("NFT: held", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Payment: unverified", { exact: true }),
+  ).toHaveCount(0);
+
+  data.status = "awaiting_completion";
+  data.winner = buyer;
+  data.agreed_price = "1.50000000";
+  data.payment_status = "pending";
+  data.payment = {
+    expected: "1.50000000",
+    paid: "0.50000000",
+    remaining: "1.00000000",
+  };
+  data.settlement_note = "A top-up is required to complete payment";
+  await page.reload();
+  await expect(
+    page.getByText("Paid 0.5 / 1.5 ZEC. Remaining: 1.0 ZEC.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(data.settlement_note, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Local settlement" }),
+  ).toHaveCount(0);
+});
+
 async function fixture(
   page: Page,
   role: "seller" | "buyer" | "public",
