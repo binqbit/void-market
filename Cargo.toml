@@ -4,6 +4,7 @@ members = [
     "crates/tfhe-math",
     "crates/private-check",
     "crates/arbiter-protocol",
+    "crates/check-workflow",
     "apps/market",
     "apps/arbiter",
 ]

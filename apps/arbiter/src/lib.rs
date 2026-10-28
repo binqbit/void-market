@@ -1,4 +1,4 @@
-pub mod artifacts;
+pub use check_workflow::artifacts;
 pub mod client;
 pub mod config;
 pub mod crypto;

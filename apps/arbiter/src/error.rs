@@ -1,5 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Private-check workflow data is invalid")]
+    Workflow(#[from] check_workflow::error::Error),
     #[error("Invalid arbiter configuration")]
     Configuration,
     #[error("Required setting {0} is missing")]

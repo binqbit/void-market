@@ -1,0 +1,21 @@
+[package]
+name = "check-workflow"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+arbiter-protocol = { path = "../arbiter-protocol" }
+private-check = { path = "../private-check" }
+tfhe-math = { path = "../tfhe-math" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "=1.0.145"
+uuid = { version = "=1.19.0", features = ["v4", "serde"] }
+sha2.workspace = true
+rand.workspace = true
+zeroize.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

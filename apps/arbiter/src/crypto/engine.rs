@@ -1,9 +1,11 @@
-use super::records::{self, Assurance, CheckManifest, ContextRecord, Request, Response};
 use crate::{
     artifacts::Artifacts,
     error::{Error, Result},
 };
 use arbiter_protocol::ArtifactRef;
+use check_workflow::messages::{
+    self as records, Assurance, CheckManifest, ContextRecord, Request, Response,
+};
 use private_check::{
     AnswerCommitment, CheckContext, CheckSession, ComputationContext, MaskedBooleanAnswer,
     NumberInput, OwnerId, OwnerMaskContribution, OwnerMaskOpening, PreparedBooleanMasks,
