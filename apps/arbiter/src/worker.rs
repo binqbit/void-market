@@ -106,8 +106,8 @@ async fn run_check(
             Progress::Complete(value) => (JobStatus::Completed, value),
         };
         let result = completion(job, status, Some(output), consumed);
-        deliver(repository, gateway, &result).await?;
-        if status == JobStatus::Completed {
+        let accepted = deliver(repository, gateway, &result).await?;
+        if accepted.status.terminal() {
             return Ok(());
         }
         let (response, demo_release) = loop {
