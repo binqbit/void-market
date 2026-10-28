@@ -21,6 +21,19 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
         return Err("Database migrations are missing or incompatible; run migrate first".into());
     }
 
+    if command == "create-approval-session" {
+        let path = std::env::args()
+            .nth(2)
+            .ok_or("A JSON file path is required")?;
+        let bytes = std::fs::read(path)?;
+        if bytes.len() > 64 * 1024 {
+            return Err("Session file is too large".into());
+        }
+        let state = AppState::new(pool, config)?;
+        crate::messages::create_session(&state, serde_json::from_slice(&bytes)?).await?;
+        return Ok(());
+    }
+
     if matches!(
         command,
         "provision-node" | "enqueue-node-job" | "provide-node-response"
@@ -54,7 +67,7 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
         return Err("Expected serve, worker, migrate or healthcheck".into());
     }
     let (stop_tx, stop_rx) = watch::channel(false);
-    let worker = if worker_mode {
+    let mut worker = if worker_mode {
         let worker_state = state.clone();
         Some(tokio::spawn(async move {
             events::run(worker_state, stop_rx).await
@@ -63,7 +76,7 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
         None
     };
     let http_state = state.clone();
-    let server = HttpServer::new(move || {
+    let mut server = HttpServer::new(move || {
         let state = http_state.clone();
         App::new()
             .wrap(Logger::default().exclude("/v1/auth/google/callback"))
@@ -82,16 +95,33 @@ pub async fn run(command: &str) -> Result<(), Box<dyn Error>> {
     .run();
     let handle = server.handle();
     let signal_stop = stop_tx.clone();
+    let signal_handle = handle.clone();
     let signal = tokio::spawn(async move {
         shutdown_signal().await;
         let _ = signal_stop.send(true);
-        handle.stop(true).await;
+        signal_handle.stop(true).await;
     });
 
     tracing::info!(command, address = %state.config.listen, "market service started");
-    let result = server.await;
+    let mut completed_worker = None;
+    let result = if let Some(task) = worker.as_mut() {
+        tokio::select! {
+            result = &mut server => result,
+            completed = task => {
+                completed_worker = Some(completed);
+                handle.stop(true).await;
+                server.await
+            }
+        }
+    } else {
+        server.await
+    };
     let _ = stop_tx.send(true);
     signal.abort();
+    if let Some(completed) = completed_worker {
+        completed??;
+        return Err("Worker stopped unexpectedly".into());
+    }
     if let Some(worker) = worker {
         worker.await??;
     }

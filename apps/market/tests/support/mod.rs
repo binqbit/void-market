@@ -34,6 +34,12 @@ pub struct Identity {
 
 impl Fixture {
     pub async fn new() -> Self {
+        Self::configured(false).await
+    }
+    pub async fn with_custody() -> Self {
+        Self::configured(true).await
+    }
+    async fn configured(custody_enabled: bool) -> Self {
         let url = env::var("TEST_DATABASE_URL")
             .expect("Set TEST_DATABASE_URL to an isolated PostgreSQL instance");
         let options = PgConnectOptions::from_str(&url).unwrap();
@@ -72,6 +78,10 @@ impl Fixture {
         let media = base.join(&schema);
         tokio::fs::create_dir_all(&media).await.unwrap();
         let config = Config {
+            custody: custody_enabled.then(|| market::custody::config::CustodyConfig {
+                master_key: zeroize::Zeroizing::new([43; 32]),
+                artifacts: media.join("checks"),
+            }),
             database: options,
             listen: "127.0.0.1:0".parse().unwrap(),
             origin: Url::parse(ORIGIN).unwrap(),

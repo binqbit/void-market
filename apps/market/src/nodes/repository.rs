@@ -19,6 +19,8 @@ pub struct Row {
     instance_id: Option<Uuid>,
     response: Option<Value>,
     output: Option<Value>,
+    cancel_requested: bool,
+    interactive: bool,
 }
 
 impl Row {
@@ -30,6 +32,8 @@ impl Row {
             input: serde_json::from_value(self.input).map_err(|_| ApiError::Internal)?,
             status,
             generation: self.generation,
+            cancel_requested: self.cancel_requested,
+            interactive: self.interactive,
             instance_id: self.instance_id,
             response: self
                 .response
@@ -72,10 +76,16 @@ pub async fn provision(pool: &PgPool, input: NodeProvision) -> Result<()> {
 
 pub async fn enqueue(pool: &PgPool, input: NewJob) -> Result<()> {
     let mut tx = pool.begin().await?;
+    enqueue_in(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub(crate) async fn enqueue_in(connection: &mut PgConnection, input: NewJob) -> Result<()> {
     let enabled: Option<bool> =
         sqlx::query_scalar("SELECT enabled FROM arbiter_nodes WHERE id=$1 FOR UPDATE")
             .bind(input.node_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut *connection)
             .await?;
     if enabled != Some(true) {
         return Err(ApiError::Forbidden);
@@ -84,7 +94,7 @@ pub async fn enqueue(pool: &PgPool, input: NewJob) -> Result<()> {
     let existing: Option<(Uuid, Value)> =
         sqlx::query_as("SELECT node_id,input FROM arbiter_jobs WHERE id=$1")
             .bind(input.id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut *connection)
             .await?;
     let payload = json!(input.input);
     if let Some((node, original)) = existing {
@@ -100,7 +110,7 @@ pub async fn enqueue(pool: &PgPool, input: NewJob) -> Result<()> {
          AND status IN ('pending', 'queued', 'running', 'waiting', 'result_pending')",
     )
     .bind(input.node_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut *connection)
     .await?;
     if pending >= 1000 {
         return Err(ApiError::Unavailable);
@@ -109,15 +119,23 @@ pub async fn enqueue(pool: &PgPool, input: NewJob) -> Result<()> {
         .bind(input.id)
         .bind(input.node_id)
         .bind(payload)
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await?;
-    events::record_node(&mut tx, "node.job_submitted", json!({"job_id":input.id})).await?;
-    tx.commit().await?;
+    events::record_node(connection, "node.job_submitted", json!({"job_id":input.id})).await?;
     Ok(())
 }
 
 pub async fn provide_response(pool: &PgPool, input: JobInput) -> Result<()> {
     let mut tx = pool.begin().await?;
+    provide_response_in(&mut tx, input).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+pub(crate) async fn provide_response_in(
+    connection: &mut PgConnection,
+    input: JobInput,
+) -> Result<()> {
     let row: Option<(Option<Value>, Option<Value>, Option<Value>)> = sqlx::query_as(
         "SELECT output, response, pending_response
          FROM arbiter_jobs
@@ -126,7 +144,7 @@ pub async fn provide_response(pool: &PgPool, input: JobInput) -> Result<()> {
          FOR UPDATE",
     )
     .bind(input.job_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut *connection)
     .await?;
     let (request, response, pending) =
         row.ok_or(ApiError::Conflict("Job is not waiting for a response"))?;
@@ -148,15 +166,14 @@ pub async fn provide_response(pool: &PgPool, input: JobInput) -> Result<()> {
     sqlx::query("UPDATE arbiter_jobs SET pending_response=$2 WHERE id=$1")
         .bind(input.job_id)
         .bind(value)
-        .execute(&mut *tx)
+        .execute(&mut *connection)
         .await?;
     events::record_node(
-        &mut tx,
+        connection,
         "node.response_submitted",
         json!({"job_id":input.job_id,"response_id":input.response.id}),
     )
     .await?;
-    tx.commit().await?;
     Ok(())
 }
 

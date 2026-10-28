@@ -119,28 +119,40 @@ pub async fn run(
     mut stop: watch::Receiver<bool>,
 ) -> std::result::Result<(), rdkafka::error::KafkaError> {
     let producer = producer(&state.config.kafka_brokers)?;
-    let mut consumer = tokio::spawn(crate::nodes::consume(state.clone(), stop.clone()));
+    let (children_stop, children_signal) = watch::channel(false);
+    let custody_enabled = state.custody.is_some();
+    let mut custody = tokio::spawn(crate::messages::run(state.clone(), children_signal.clone()));
+    let mut consumer = tokio::spawn(crate::nodes::consume(state.clone(), children_signal));
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     let mut tick = 0u64;
-
+    let mut consumer_ended = false;
+    let mut custody_ended = false;
+    let mut failure = None;
     loop {
         tokio::select! {
             _ = stop.changed() => break,
             result = &mut consumer => {
-                state.worker_ready.store(false, Ordering::Relaxed);
-                state.node_ready.store(false, Ordering::Relaxed);
-                return result.unwrap_or(Err(rdkafka::error::KafkaError::Canceled));
+                consumer_ended = true;
+                failure = Some(
+                    result.unwrap_or(Err(rdkafka::error::KafkaError::Canceled))
+                        .err().unwrap_or(rdkafka::error::KafkaError::Canceled),
+                );
+                break;
+            }
+            _ = &mut custody, if custody_enabled => {
+                custody_ended = true;
+                failure = Some(rdkafka::error::KafkaError::Canceled);
+                break;
             }
             _ = interval.tick() => {
                 let result = deliver_batch(&state, &producer).await;
-                let ready = result.is_ok()
-                    && state.node_ready.load(Ordering::Relaxed)
+                let ready = result.is_ok() && state.node_ready.load(Ordering::Relaxed)
                     && broker_ready(&producer, state.config.event_topic.clone()).await;
                 state.worker_ready.store(ready, Ordering::Relaxed);
+
                 if let Err(error) = result {
                     tracing::warn!(error = %error, "outbox delivery will retry");
                 }
-
                 tick += 1;
                 if tick.is_multiple_of(60) {
                     remove_expired_sessions(&state.pool).await;
@@ -148,12 +160,18 @@ pub async fn run(
             }
         }
     }
-
     state.worker_ready.store(false, Ordering::Relaxed);
-    if let Ok(result) = consumer.await {
-        result?;
+    let _ = children_stop.send(true);
+    if !consumer_ended {
+        let _ = consumer.await;
     }
-    Ok(())
+    if !custody_ended {
+        let _ = custody.await;
+    }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 async fn broker_ready(producer: &FutureProducer, topic: String) -> bool {

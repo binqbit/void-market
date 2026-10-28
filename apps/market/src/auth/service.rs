@@ -63,6 +63,9 @@ pub async fn register_finish(
     .bind(serde_json::to_value(&passkey).map_err(|_| ApiError::Internal)?)
     .execute(&mut *tx)
     .await?;
+    if let Some(custody) = &state.custody {
+        custody.provision(&mut tx, account_id).await?;
+    }
     let cookie = sessions::issue(
         &mut tx,
         account_id,
@@ -149,6 +152,9 @@ pub async fn login_finish(state: &AppState, input: LoginFinish) -> Result<(Heade
     .bind(account_id)
     .execute(&mut *tx)
     .await?;
+    if let Some(custody) = &state.custody {
+        custody.provision(&mut tx, account_id).await?;
+    }
     let cookie = sessions::issue(
         &mut tx,
         account_id,

@@ -102,10 +102,14 @@ async fn run_check(
             return Ok(());
         }
     };
-    let deadline = Instant::now() + Duration::from_secs(600);
+    // Human approval budgets are metered by the market; infrastructure waits do not spend them.
+    let deadline = (!job.interactive).then(|| Instant::now() + Duration::from_secs(600));
     let mut consumed = None;
     loop {
-        if *stop.borrow() || !alive.load(Ordering::Relaxed) || Instant::now() >= deadline {
+        if *stop.borrow()
+            || !alive.load(Ordering::Relaxed)
+            || deadline.is_some_and(|deadline| Instant::now() >= deadline)
+        {
             drop(running);
             return interrupt(repository, gateway, job).await;
         }
@@ -119,11 +123,18 @@ async fn run_check(
             return Ok(());
         }
         let response = loop {
-            if *stop.borrow() || !alive.load(Ordering::Relaxed) || Instant::now() >= deadline {
+            if *stop.borrow()
+                || !alive.load(Ordering::Relaxed)
+                || deadline.is_some_and(|deadline| Instant::now() >= deadline)
+            {
                 drop(running);
                 return interrupt(repository, gateway, job).await;
             }
             let current = gateway.job(job.id).await?;
+            if current.cancel_requested {
+                drop(running);
+                return interrupt(repository, gateway, job).await;
+            }
             if current.generation != job.generation {
                 return Err(Error::Ownership);
             }

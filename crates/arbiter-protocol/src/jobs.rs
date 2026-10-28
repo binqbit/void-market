@@ -74,6 +74,10 @@ pub struct Job {
     pub input: ArtifactRef,
     pub status: JobStatus,
     pub generation: i64,
+    #[serde(default)]
+    pub cancel_requested: bool,
+    #[serde(default)]
+    pub interactive: bool,
     pub instance_id: Option<Uuid>,
     pub response: Option<ArtifactRef>,
     pub output: Option<ArtifactRef>,

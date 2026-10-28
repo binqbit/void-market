@@ -1,3 +1,4 @@
+mod message_cases;
 mod node_cases;
 mod support;
 
@@ -213,6 +214,7 @@ async fn ownership_transfer_retries_authorization_and_restart() {
     fixture.state = AppState::new(
         fixture.state.pool.clone(),
         market::config::Config {
+            custody: None,
             database: fixture.state.config.database.clone(),
             listen: fixture.state.config.listen,
             origin: fixture.state.config.origin.clone(),

@@ -111,6 +111,7 @@ async fn broker_delivery_lost_ack_and_restart_keep_one_result() {
     let state = AppState::new(
         pool.clone(),
         MarketConfig {
+            custody: None,
             database: market_db,
             listen: "127.0.0.1:0".parse().unwrap(),
             origin: "http://localhost:3000".parse().unwrap(),

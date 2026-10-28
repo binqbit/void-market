@@ -157,6 +157,9 @@ async fn finish(
     .bind(identity.email)
     .fetch_one(&mut *tx)
     .await?;
+    if let Some(custody) = &state.custody {
+        custody.provision(&mut tx, account).await?;
+    }
     let cookie = sessions::issue(
         &mut tx,
         account,

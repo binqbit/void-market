@@ -8,6 +8,8 @@ use webauthn_rs::prelude::{Webauthn, WebauthnBuilder};
 
 #[derive(Clone)]
 pub struct AppState {
+    pub message_streams: Arc<tokio::sync::Semaphore>,
+    pub custody: Option<Arc<crate::custody::Custody>>,
     pub pool: PgPool,
     pub config: Arc<Config>,
     pub webauthn: Arc<Webauthn>,
@@ -25,7 +27,14 @@ impl AppState {
         let webauthn = WebauthnBuilder::new(&config.rp_id, &config.origin)?
             .rp_name("Void Market")
             .build()?;
+        let custody = config
+            .custody
+            .as_ref()
+            .map(crate::custody::Custody::new)
+            .transpose()?;
         Ok(Self {
+            message_streams: Arc::new(tokio::sync::Semaphore::new(64)),
+            custody: custody.map(Arc::new),
             pool,
             config: Arc::new(config),
             webauthn: Arc::new(webauthn),

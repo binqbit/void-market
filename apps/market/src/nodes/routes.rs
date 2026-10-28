@@ -114,7 +114,7 @@ async fn registration(
 async fn jobs(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
     let actor = authentication::authorize(&state, &request, &[], false).await?;
     let rows: Vec<Row> = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output
+        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
          FROM arbiter_jobs
          WHERE node_id=$1
          AND status IN ('queued', 'running', 'waiting', 'result_pending')
@@ -135,7 +135,7 @@ async fn job(
 ) -> Result<HttpResponse> {
     let actor = authentication::authorize(&state, &request, &[], false).await?;
     let row: Row = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output
+        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
          FROM arbiter_jobs
          WHERE node_id=$1
          AND id=$2",
@@ -191,7 +191,7 @@ async fn claim(
          AND node_id=$2
          AND status='queued'
          AND generation=$4
-         RETURNING id, node_id, input, status, generation, instance_id, response, output",
+         RETURNING id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive",
     )
     .bind(*id)
     .bind(actor.request.node_id)
@@ -293,7 +293,7 @@ async fn result(
         return finish(tx, &actor, json!({"recorded":true})).await;
     }
     let row: Row = sqlx::query_as(
-        "SELECT id, node_id, input, status, generation, instance_id, response, output
+        "SELECT id, node_id, input, status, generation, instance_id, response, output, cancel_requested, interactive
          FROM arbiter_jobs
          WHERE id=$1
          AND node_id=$2
@@ -305,7 +305,8 @@ async fn result(
     .await?
     .ok_or(ApiError::NotFound)?;
     let current = row.job()?;
-    if current.instance_id != Some(actor.request.instance_id)
+    if (current.cancel_requested && input.status != JobStatus::Interrupted)
+        || current.instance_id != Some(actor.request.instance_id)
         || current.generation != input.generation
         || !matches!(current.status, JobStatus::Running | JobStatus::Waiting)
         || (input.status != JobStatus::Interrupted

@@ -67,7 +67,10 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
                 .await?;
         }
         "node.result_submitted" => {
-            repository::apply_result(&mut tx, event_id(&event.data, "result_id")?).await?;
+            let id = event_id(&event.data, "result_id")?;
+            crate::messages::lock_result_session(&mut tx, id).await?;
+            repository::apply_result(&mut tx, id).await?;
+            crate::messages::apply_node_result(state, &mut tx, id).await?;
         }
         "node.response_submitted" => {
             let id = event_id(&event.data, "job_id")?;
@@ -84,7 +87,21 @@ async fn apply(state: &AppState, bytes: &[u8]) -> Result<()> {
             .execute(&mut *tx)
             .await?;
         }
-        "node.heartbeat" => {}
+        "message.approved" => {
+            let id = event_id(&event.data, "message_id")?;
+            sqlx::query(
+                "UPDATE approval_messages SET status='queued',
+                 revision=nextval('message_revision') WHERE id=$1 AND status='approved'",
+            )
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        "message.response_ready" => {
+            crate::messages::consume_response(state, &mut tx, event_id(&event.data, "message_id")?)
+                .await?;
+        }
+        "node.heartbeat" | "session.created" | "message.expired" | "message.withdrawn" => {}
         _ => return Err(ApiError::BadRequest("Unknown node event")),
     }
     tx.commit().await?;

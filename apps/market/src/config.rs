@@ -3,6 +3,7 @@ use std::{env, net::SocketAddr, path::PathBuf, str::FromStr};
 use url::Url;
 
 pub struct Config {
+    pub custody: Option<crate::custody::config::CustodyConfig>,
     pub database: PgConnectOptions,
     pub listen: SocketAddr,
     pub origin: Url,
@@ -78,6 +79,7 @@ impl Config {
         };
 
         Ok(Self {
+            custody: crate::custody::config::CustodyConfig::from_env()?,
             database,
             listen: setting("LISTEN", "127.0.0.1:8080").parse()?,
             rp_id: setting("RP_ID", "localhost"),
