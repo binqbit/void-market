@@ -28,18 +28,9 @@ x-arbiter: &arbiter
     SESSION_CAPACITY: "8"
     RUST_LOG: info
   secrets:
-    - source: arbiter_database_password
-      uid: "${LOCAL_UID:-1000}"
-      gid: "${LOCAL_GID:-1000}"
-      mode: 0400
-    - source: arbiter_signing_key
-      uid: "${LOCAL_UID:-1000}"
-      gid: "${LOCAL_GID:-1000}"
-      mode: 0400
-    - source: arbiter_service_token
-      uid: "${LOCAL_UID:-1000}"
-      gid: "${LOCAL_GID:-1000}"
-      mode: 0400
+    - arbiter_database_password
+    - arbiter_signing_key
+    - arbiter_service_token
   volumes:
     - ${ARBITER_ARTIFACT_ROOT:?Set the node-owned artifact directory}:/var/lib/arbiter/artifacts
   pids_limit: 128
@@ -93,7 +84,7 @@ services:
 
 secrets:
   arbiter_database_password:
-    environment: ARBITER_DATABASE_PASSWORD
+    file: ${ARBITER_DATABASE_PASSWORD_FILE:?Set the arbiter database password file}
   arbiter_signing_key:
     file: ${ARBITER_SIGNING_KEY_FILE:?Set the node signing-key file}
   arbiter_service_token:

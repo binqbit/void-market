@@ -166,9 +166,9 @@ services:
 
 secrets:
   database_password:
-    environment: DATABASE_PASSWORD
+    file: ${DATABASE_PASSWORD_FILE:?Set the database password file}
   jwt_secret:
-    environment: JWT_SECRET
+    file: ${JWT_SECRET_FILE:?Set the JWT signing-secret file}
 
 volumes:
   postgres_data:

@@ -24,6 +24,31 @@ def save(path, values):
     path.chmod(0o600)
 
 
+def prepare_secret_files(state, values):
+    directory = state / "secrets"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    directory.chmod(0o700)
+
+    for name in ("DATABASE_PASSWORD", "JWT_SECRET", "ARBITER_DATABASE_PASSWORD"):
+        file_variable = name + "_FILE"
+        path = Path(values.get(file_variable, directory / name.lower()))
+        previous = values.get(name)
+
+        if path.exists():
+            if previous is not None and path.read_text() != previous:
+                raise RuntimeError(f"Retained {file_variable} does not match its previous value")
+        elif previous is not None:
+            path.write_text(previous)
+        else:
+            raise RuntimeError(f"Restore the retained {file_variable} before restarting")
+
+        # Application containers use the host UID. PostgreSQL reads its secret
+        # as root before switching to its database user.
+        path.chmod(0o600)
+        values[file_variable] = str(path)
+        values.pop(name, None)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -76,6 +101,10 @@ def main():
         save(env_file, values)
     else:
         raise SystemExit("This localnet has not been initialized. Run up first.")
+
+    prepare_secret_files(state, values)
+    save(env_file, values)
+
     command = ["docker", "compose", "--env-file", str(env_file)]
     for filename in (
         "compose.yaml",

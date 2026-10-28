@@ -7,10 +7,7 @@ x-custody: &custody
     CUSTODY_MASTER_KEY_FILE: /run/secrets/custody_master_key
     CUSTODY_ARTIFACT_ROOT: /var/lib/market/checks
   secrets:
-    - source: custody_master_key
-      uid: "${LOCAL_UID:-1000}"
-      gid: "${LOCAL_GID:-1000}"
-      mode: 0400
+    - custody_master_key
   volumes:
     - ${DEV_MEDIA_ROOT:?Set the intended development media directory}:/var/lib/market/media
     - ${ARBITER_ARTIFACT_ROOT:?Set the shared check artifact directory}:/var/lib/market/checks
