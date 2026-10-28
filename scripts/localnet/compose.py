@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -32,8 +33,18 @@ def set_private_permissions(path, values):
 
 
 def save(path, values):
-    path.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
-    set_private_permissions(path, values)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as output:
+            temporary = Path(output.name)
+            output.write("".join(f"{key}={value}\n" for key, value in values.items()))
+            output.flush()
+            os.fsync(output.fileno())
+        set_private_permissions(temporary, values)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def prepare_secret_files(state, values):
@@ -192,7 +203,8 @@ def main():
         "localnet-miner",
         "localnet-faucet",
     )
-    rpc = Rpc(f"http://127.0.0.1:{values['ETHEREUM_RPC_PORT']}")
+    rpc_port = compose_environment.get("ETHEREUM_RPC_PORT", values["ETHEREUM_RPC_PORT"])
+    rpc = Rpc(f"http://127.0.0.1:{rpc_port}")
     identity_parent = state / "identity-parent"
     identity = identity_parent / "node"
     set_private_permissions(identity_parent, values)
@@ -224,15 +236,21 @@ def main():
             ],
             check=True,
         )
-        for source, destination in (
-            ("signing.key", "ARBITER_SIGNING_KEY_FILE"),
-            ("service.token", "ARBITER_SERVICE_TOKEN_FILE"),
-        ):
-            Path(values[destination]).write_bytes((identity / source).read_bytes())
-        node = json.loads((identity / "node.json").read_text())
-        values["NODE_ID"] = node["node_id"]
-        save(env_file, values)
+
+    # Identity creation may have completed just before a previous launch stopped.
+    # Resume exporting that same identity instead of retaining placeholder keys or IDs.
+    for source, destination in (
+        ("signing.key", "ARBITER_SIGNING_KEY_FILE"),
+        ("service.token", "ARBITER_SERVICE_TOKEN_FILE"),
+    ):
+        path = Path(values[destination])
+        material = (identity / source).read_bytes()
+        if path.read_bytes() != material:
+            path.write_bytes(material)
+        set_private_permissions(path, values)
     provision = json.loads((identity / "node.json").read_text())
+    values["NODE_ID"] = provision["node_id"]
+    save(env_file, values)
     provision["token_file"] = "/run/secrets/arbiter_service_token"
     local_provision = state / "secrets" / "node.json"
     local_provision.write_text(json.dumps(provision))
@@ -253,7 +271,8 @@ def main():
     )
     compose("run", "--rm", "--no-deps", "migrate", "init-demo")
     compose("up", "-d", "--wait", "api", "worker", "arbiter", "web")
-    print(f"Localnet ready: {values['ORIGIN']}/demo. State is retained at {state}.")
+    origin = compose_environment.get("ORIGIN", values["ORIGIN"])
+    print(f"Localnet ready: {origin}/demo. State is retained at {state}.")
 
 
 if __name__ == "__main__":
