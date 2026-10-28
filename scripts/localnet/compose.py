@@ -124,7 +124,7 @@ def main():
                 f"ETHEREUM_CUSTODY_ADDRESS={address}",
                 "-v",
                 f"{identity_parent}:/identity",
-                "void-market-arbiter:local",
+                "void-market-arbiter-demo:local",
                 "identity",
                 "/identity/node",
             ],

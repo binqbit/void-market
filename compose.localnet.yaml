@@ -67,6 +67,10 @@ services:
       retries: 60
       start_period: 30s
   api:
+    image: void-market-demo:local
+    build:
+      args:
+        DEMO_MODE: "true"
     environment:
       <<: *chain-env
     volumes:
@@ -77,6 +81,10 @@ services:
       localnet-faucet:
         condition: service_healthy
   worker:
+    image: void-market-demo:local
+    build:
+      args:
+        DEMO_MODE: "true"
     environment:
       <<: *chain-env
     volumes:
@@ -87,7 +95,21 @@ services:
       localnet-faucet:
         condition: service_healthy
   migrate:
+    image: void-market-demo:local
+    build:
+      args:
+        DEMO_MODE: "true"
     environment:
       <<: *chain-env
     volumes:
       - ${LOCALNET_STATE_DIR}:/var/lib/localnet:ro
+  arbiter:
+    image: void-market-arbiter-demo:local
+    build:
+      args:
+        DEMO_MODE: "true"
+  arbiter-migrate:
+    image: void-market-arbiter-demo:local
+    build:
+      args:
+        DEMO_MODE: "true"

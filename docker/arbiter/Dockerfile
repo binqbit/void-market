@@ -5,7 +5,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY apps/market ./apps/market
 COPY apps/arbiter ./apps/arbiter
-RUN cargo build --locked --release --package arbiter
+ARG DEMO_MODE=false
+RUN if [ "$DEMO_MODE" = "true" ]; then \
+      cargo build --locked --release --package arbiter --features demo-mode; \
+    else cargo build --locked --release --package arbiter; fi
 
 FROM debian:bookworm-slim
 RUN apt-get update \
