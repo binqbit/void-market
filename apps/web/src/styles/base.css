@@ -233,7 +233,8 @@ main {
   padding: 8px 14px;
   font-size: 12px;
 }
-.button-row {
+.button-row,
+.dialog-actions {
   display: flex;
   gap: 14px;
   align-items: center;

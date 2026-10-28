@@ -50,6 +50,8 @@ export function AuctionPage() {
     );
   const auction = query.data;
   const own = auction.participation;
+  const showMessagesLink =
+    auction.status === "open" && own?.status === "active";
   const native = auction.execution === "localnet_custody";
   const transactions = (messages.snapshot?.transactions ?? []).filter(
     (item) => item.auction_id === auction.id,
@@ -118,27 +120,31 @@ export function AuctionPage() {
                         auction.bidding_closes_at_ms ??
                         auction.closes_at_ms - 3600000,
                     ).toLocaleString()}
+                    .
                   </strong>
-                  .
                 </p>
                 <p>
                   After bidding closes, your shared 10-minute budget runs only
                   while a response is needed from you. The timer pauses while
                   you wait for others or the service.
                 </p>
-                {own?.status === "active" && (
+              </>
+            )}
+            {(showMessagesLink || auction.actions.close_bidding) && (
+              <div className="button-row">
+                {showMessagesLink && (
                   <Link className="button" to="/messages">
                     Open Messages
                   </Link>
                 )}
-              </>
-            )}
-            {auction.actions.close_bidding && (
-              <CloseBiddingButton
-                id={auction.id}
-                activeBuyers={auction.active_buyers}
-                onComplete={query.refresh}
-              />
+                {auction.actions.close_bidding && (
+                  <CloseBiddingButton
+                    id={auction.id}
+                    activeBuyers={auction.active_buyers}
+                    onComplete={query.refresh}
+                  />
+                )}
+              </div>
             )}
             {auction.status === "matching" && (
               <p>
